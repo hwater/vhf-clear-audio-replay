@@ -1,0 +1,12 @@
+# VHF – clear Audio replay: Konfiguration
+# Kopieren nach  /etc/vhf/vhf.conf  (wird ohne Neustart gelesen).
+# Format: key = value ; Zeilen mit # sind Kommentare.
+
+# Schiffsname in den Titelzeilen von Nachhör-Liste (:8088) und Panel (:8090).
+shipname = Wilhelmina
+
+# HomePod-/AirPlay-Übernahme im Panel (:8090) — nur relevant mit Control-Panel-Add-on:
+#   auto = zeigen, wenn HomePods (ShiPod-Ausgänge) in OwnTone erkannt werden
+#   on   = immer zeigen
+#   off  = nie zeigen — Panel nutzt nur den Messe-Lautsprecher
+homepods = auto

@@ -7,6 +7,20 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 DIR = os.environ.get("VHF_DIR", "/srv/music/VHF-Aufnahmen")
 PORT = int(os.environ.get("VHF_WEB_PORT", "8088"))
+CONFIG_FILE = os.environ.get("VHF_CONFIG", "/etc/vhf/vhf.conf")
+
+def shipname():
+    # Schiffsname aus /etc/vhf/vhf.conf (key=value); Default falls nicht gesetzt.
+    try:
+        for ln in open(CONFIG_FILE):
+            ln = ln.strip()
+            if ln.startswith("shipname") and "=" in ln:
+                v = ln.partition("=")[2].strip()
+                if v:
+                    return v
+    except Exception:
+        pass
+    return "Wilhelmina"
 
 LABELS_FILE = os.path.join(DIR, ".labels.txt")
 LABEL_GROUPS = [
@@ -109,6 +123,7 @@ def owntone_update():
         pass
 
 def page():
+    ship = html.escape(shipname())
     rows = []
     for f in recordings():
         base = f[4:-4]
@@ -180,7 +195,7 @@ def page():
             ".bar .hide{background:#5a1d1d;color:#ffd9d9}"
             "details{margin-top:1.2em}summary{cursor:pointer;color:#8fa2b6}audio{width:100%;margin-top:.5em}"
             "</style></head><body>"
-            "<h1>&#9875;&nbsp; Wilhelmina &middot; Audio</h1>"
+            "<h1>&#9875;&nbsp; " + ship + " &middot; Audio</h1>"
             "<div class=sub>VHF &middot; NACHH&Ouml;REN</div>"
             "<div class=panel>"
             "<p class=hint>Antippen zum Abh&ouml;ren &middot; &#11015; Download &middot; &#10005; einzeln ausblenden &middot; "

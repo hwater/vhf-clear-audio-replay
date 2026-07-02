@@ -99,8 +99,12 @@ bin/      vhf-recorder.sh · vhf-classify.py · vhf-web.py
 etc/      asound.conf (ALSA capture) · udev rule · modprobe index
 systemd/  vhf-recorder · vhf-web · vhf-cleanup (.service/.timer)
 docs/     architecture · install · tuning · HomePod add-on
-addons/   homepods/  – optional AirPlay-2 output (separate setup)
+addons/   homepods/       – optional AirPlay-2 output (separate setup)
+          control-panel/  – optional touch control panel (:8090)
 ```
+
+The ship name shown in the title bars is configurable via
+[`etc/vhf.conf.example`](etc/vhf.conf.example) (`/etc/vhf/vhf.conf`, no restart needed).
 
 ## Docs
 
@@ -108,6 +112,7 @@ addons/   homepods/  – optional AirPlay-2 output (separate setup)
 - [docs/install.md](docs/install.md) – full installation & first check
 - [docs/tuning.md](docs/tuning.md) – adjust VOX thresholds, denoise, noise filter
 - [docs/addons-homepods.md](docs/addons-homepods.md) – add HomePod / AirPlay output
+- [docs/addons-control-panel.md](docs/addons-control-panel.md) – control panel (:8090), ship name & Messe fallback *(DE)*
 
 ## License
 

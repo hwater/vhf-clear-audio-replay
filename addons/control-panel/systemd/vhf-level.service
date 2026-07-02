@@ -1,0 +1,12 @@
+[Unit]
+Description=VHF Pegel-Messung (Quelle fuers VU-Meter)
+After=sound.target
+
+[Service]
+ExecStart=/bin/bash -c 'exec sox -q -t alsa vhf -t raw -r 44100 -b 16 -e signed-integer -c 1 - highpass 250 lowpass 3400 | /usr/local/bin/vhf-level.py'
+Restart=always
+RestartSec=2
+Nice=5
+
+[Install]
+WantedBy=multi-user.target
