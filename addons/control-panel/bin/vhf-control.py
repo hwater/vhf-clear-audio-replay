@@ -426,19 +426,16 @@ input[type=range]::-moz-range-thumb{width:26px;height:26px;border-radius:50%;bac
 .ic.good{color:#9affc7}.ic.bad{color:#ffb3b3}
 .ic.cur{outline:1px solid currentColor;outline-offset:-3px;background:#13261c}
 .ic.bad.cur{background:#2a1414}
-.rec{position:relative;display:flex;align-items:center;gap:0;padding:.45em .6em;border-radius:7px;
+.rec{position:relative;display:flex;align-items:center;gap:8px;padding:.45em .55em;border-radius:7px;
  background:#213141;border-left:5px solid #888;font-size:13px;cursor:pointer;transition:background .1s}
 .rec .vu{position:absolute;inset:0;display:flex;align-items:center;gap:8px;padding:0 .7em;
  border-radius:7px;background:#12251b;border:1px solid #2f7d53;box-sizing:border-box;cursor:pointer}
 .rec:hover{background:#2b4055}
 .rec.play{background:#1d4a34;outline:1px solid #3a9a63}
 .rec.noise{opacity:.55}
-.rec .sp{flex:1}
-.rec .len{width:34px;flex:none;text-align:right;font-weight:700;color:#eaf2fa}
-.rec .verw{width:56px;flex:none;margin-left:8px;font-size:10px;letter-spacing:.04em;color:#b6a0a0;white-space:nowrap}
-.rec .age{width:124px;flex:none;color:#c3cede;font-size:12px;white-space:nowrap}
-.rec .tim{width:104px;flex:none;color:#8fa2b6;font-size:11px;white-space:nowrap}
-.rec .ic{margin-left:6px}
+.rec .len{flex:none;text-align:right;font-weight:700;color:#eaf2fa;white-space:nowrap}
+.rec .meta{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#c3cede;font-size:12px}
+.rec .ic{flex:none;margin:0}
 .shipodstat{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
 .pod{padding:.35em .7em;border-radius:8px;font-size:13px;font-weight:600}
 .pod.ok{background:#163b2a;color:#9affc7}.pod.warn{background:#3a3413;color:#ffe08a}
@@ -642,11 +639,7 @@ async function recPoll(){if(playing||!recOpen)return;   // zu / Wiedergabe -> ni
     const n=x.name.replace(/'/g,"\\'");
     return '<div class="rec'+(x.noise?' noise':'')+'" data-name="'+x.name+'" style="border-left-color:'+col+'" onclick="replayFile(this,\''+n+'\')">'
       +'<span class=len>'+x.sec+' s</span>'
-      +'<span class=verw>'+(x.noise?'verworfen':'')+'</span>'
-      +'<span class=sp></span>'
-      +'<span class=age>'+agefmt(x.age)+'</span>'
-      +'<span class=sp></span>'
-      +'<span class=tim>'+(x.t||'')+'</span>'
+      +'<span class=meta>'+(x.t||'')+' &middot; '+agefmt(x.age)+(x.noise?' &middot; verworfen':'')+'</span>'
       +'<button class="ic good'+(x.noise?'':' cur')+'" title="Sprache (behalten)" onclick="event.stopPropagation();classify(\''+n+'\',\'speech\')">&#10003;</button>'
       +'<button class="ic bad'+(x.noise?' cur':'')+'" title="St&ouml;rung (verwerfen)" onclick="event.stopPropagation();classify(\''+n+'\',\'noise\')">&#10007;</button>'
       +'</div>';}).join('');
