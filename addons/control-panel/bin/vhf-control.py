@@ -492,6 +492,12 @@ input[type=range]::-moz-range-thumb{width:26px;height:26px;border-radius:50%;bac
 <div class=sub id=sub>VHF-MONITOR &amp; AIRPLAY</div>
 <div class=panel>
 
+  <button class=recbtn id=recbtn onclick="toggleRecs()">&#9835; Nachh&ouml;ren letzte Funkspr&uuml;che &#9662;</button>
+  <div id=recwrap style="display:none">
+    <div id=recspin style="text-align:center;padding:1.2em;color:#8fa2b6"><span class=spin></span> l&auml;dt &hellip;</div>
+    <iframe id=recframe class=recframe title=Aufnahmen style="display:none"></iframe>
+  </div>
+
   <div class=card>
     <div class=mlab style="display:flex;justify-content:space-between;align-items:center">
       <span>Funk-Pegel</span><span id=rxind class=rxind>FUNK AKTIV</span></div>
@@ -516,14 +522,6 @@ input[type=range]::-moz-range-thumb{width:26px;height:26px;border-radius:50%;bac
     <div id=shipodstat class=shipodstat></div>
   </div>
 
-  <div class=card>
-    <div class=mlab>&#9835; Aufnahmen</div>
-    <button class=recbtn id=recbtn onclick="showRecs()">&#9835; Nachh&ouml;ren &ndash; Aufnahmen laden</button>
-    <div id=recwrap style="display:none">
-      <div id=recspin style="text-align:center;padding:1.2em;color:#8fa2b6"><span class=spin></span> l&auml;dt &hellip;</div>
-      <iframe id=recframe class=recframe title=Aufnahmen style="display:none"></iframe>
-    </div>
-  </div>
 </div>
 </div>
 </div>
@@ -577,12 +575,20 @@ function applyPods(on){                 // keine HomePods an Bord -> nur Messe z
   const hp=$('hpcard'); if(hp) hp.style.display=on?'':'none';
   const sub=$('sub'); if(sub) sub.textContent=on?'VHF-MONITOR · AIRPLAY':'VHF-MONITOR · MESSE';}
 
-function showRecs(){                     // Aufnahmen-Liste erst auf Klick laden (schneller Aufbau)
+function toggleRecs(){                   // Aufnahmen-Liste ein-/ausklappen; lazy beim 1. Mal
   const b=$('recbtn'), w=$('recwrap'), f=$('recframe'), sp=$('recspin');
-  b.style.display='none'; w.style.display='block'; sp.style.display='block';
-  document.body.style.cursor='progress';
-  f.onload=function(){sp.style.display='none'; f.style.display='block'; document.body.style.cursor='';};
-  f.src='/rec/?embed=1';}
+  const open = (w.style.display==='none' || !w.style.display);
+  const CH=' &#9662;', UP=' &#9652;', LBL='&#9835; Nachhören letzte Funksprüche';
+  if(open){
+    w.style.display='block'; b.innerHTML=LBL+UP;
+    if(!f.getAttribute('src')){          // erst beim ersten Öffnen laden (Warte-Cursor)
+      sp.style.display='block'; f.style.display='none'; document.body.style.cursor='progress';
+      f.onload=function(){sp.style.display='none'; f.style.display='block'; document.body.style.cursor='';};
+      f.src='/rec/?embed=1';
+    }
+  } else {
+    w.style.display='none'; b.innerHTML=LBL+CH;
+  }}
 
 function renderPodNet(n){const e=$('podnet');if(!e)return;
   if(n&&(!n.bb||!n.sb)){
