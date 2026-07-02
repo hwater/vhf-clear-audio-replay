@@ -1,0 +1,7 @@
+[Unit]
+Description=ShiPods als OwnTone-Ausgang ausgewaehlt halten
+After=owntone.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/vhf-shipods.sh

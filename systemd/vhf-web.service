@@ -1,0 +1,17 @@
+[Unit]
+Description=VHF-Aufnahmen Web-Liste (Port 8088)
+After=network.target
+
+[Service]
+Type=simple
+# Laeuft NICHT als root: dynamischer User in Gruppe audio. Loeschen funktioniert
+# ueber die Verzeichnisrechte (Ordner group-writable, Gruppe audio).
+DynamicUser=yes
+SupplementaryGroups=audio
+ReadWritePaths=/srv/music/VHF-Aufnahmen
+ExecStart=/usr/bin/python3 /usr/local/bin/vhf-web.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

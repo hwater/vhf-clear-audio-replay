@@ -1,0 +1,10 @@
+# Aufnahmen & Laufzeitdaten gehören nicht ins Repo
+/srv/
+*.mp3
+*.wav
+
+# OS / Editor
+.DS_Store
+*.swp
+__pycache__/
+*.pyc

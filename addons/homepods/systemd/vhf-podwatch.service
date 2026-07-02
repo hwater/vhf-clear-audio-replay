@@ -1,0 +1,12 @@
+[Unit]
+Description=VHF HomePod Erreichbarkeits-Waechter (+ OwnTone-Selbstheilung)
+After=owntone.service avahi-daemon.service
+
+[Service]
+ExecStart=/usr/local/bin/vhf-podwatch.sh
+Restart=always
+RestartSec=5
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

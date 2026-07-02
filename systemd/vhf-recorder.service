@@ -1,0 +1,13 @@
+[Unit]
+Description=VHF VOX-Mitschnitt (eine MP3 pro Funkspruch)
+After=sound.target owntone.service
+Wants=owntone.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/vhf-recorder.sh
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

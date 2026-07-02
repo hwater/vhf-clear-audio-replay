@@ -1,0 +1,6 @@
+[Unit]
+Description=VHF-Aufnahmen: aussortierte Stoerungen (>1 Tag) + alte (>7 Tage) loeschen
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash -c 'find /srv/music/VHF-Aufnahmen -name ".noise-*" -mtime +1 -delete; find /srv/music/VHF-Aufnahmen -name "VHF_*.mp3" -mtime +7 -delete; curl -s -X PUT http://localhost:3689/api/update >/dev/null 2>&1 || true'
