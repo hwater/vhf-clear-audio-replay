@@ -483,7 +483,7 @@ input[type=range]::-moz-range-thumb{width:26px;height:26px;border-radius:50%;bac
 .recpanel.on{display:block}
 .recbar{display:flex;align-items:center;gap:12px;margin-bottom:8px}
 .recbar button{background:#1d3a5a;color:#cfe6ff;border:none;border-radius:8px;padding:.5em .9em;font-size:14px}
-.recframe{width:100%;height:90vh;border:1px solid #20303d;border-radius:10px;background:#0b1020}
+.recframe{width:100%;height:62vh;border:1px solid #20303d;border-radius:10px;background:#0b1020;display:block}
 @media(max-width:820px){.wrap{flex-direction:column;align-items:stretch}.left,.recpanel{flex:none;max-width:100%}.recframe{height:70vh}}
 </style></head><body>
 <div class=wrap>
@@ -504,11 +504,7 @@ input[type=range]::-moz-range-thumb{width:26px;height:26px;border-radius:50%;bac
     <div class=fader><label>Lautst&auml;rke</label><input type=range id=shp min=0 max=100 step=1><span class=val id=vhp>60</span></div>
     <div class=fader><label>Verz&ouml;gerung</label><input type=range id=sdelay min=0 max=30 step=0.5><span class=val id=vdelay>7.0 s</span></div>
     <div class=btns><button class=tg id=bmute><span class=dot></span>Funk nachh&ouml;ren<span class=sub2>nicht live &ndash; nur sp&auml;ter nachh&ouml;ren</span></button></div>
-    <div class=rdd>
-      <button id=breplay class=recbtn style="height:44px;margin-top:10px">&#x21bb; Funk wiederholen &#9662;</button>
-      <div id=reclist class="reclist open"></div>
-    </div>
-    <div class=desc>Echter Funk wird kurz auf die HomePods gespielt (in dieser Lautst&auml;rke), dann wieder freigegeben. St&ouml;rungen werden ignoriert. Bei <b>nachh&ouml;ren</b> l&auml;uft die Aufnahme + das VU-Meter weiter, aber die HomePods bleiben live unber&uuml;hrt &ndash; du h&ouml;rst den Funk &uuml;ber die Liste nach.</div>
+    <div class=desc>Echter Funk wird kurz auf die HomePods gespielt (in dieser Lautst&auml;rke), dann wieder freigegeben. St&ouml;rungen werden ignoriert. Bei <b>nachh&ouml;ren</b> l&auml;uft die Aufnahme + das VU-Meter weiter, aber die HomePods bleiben live unber&uuml;hrt &ndash; du h&ouml;rst den Funk &uuml;ber die Aufnahmen-Liste nach.</div>
     <div id=shipodstat class=shipodstat></div>
   </div>
 
@@ -521,13 +517,10 @@ input[type=range]::-moz-range-thumb{width:26px;height:26px;border-radius:50%;bac
   </div>
 
   <div class=card>
-    <button class=recbtn id=recbtn onclick="toggleRec()">&#9835; Aufnahmen anzeigen</button>
+    <div class=mlab>&#9835; Aufnahmen &ndash; nachh&ouml;ren</div>
+    <iframe id=recframe class=recframe title=Aufnahmen src="/rec/?embed=1"></iframe>
   </div>
 </div>
-</div>
-<div id=recpanel class=recpanel>
-  <div class=recbar><button onclick="toggleRec()">&#8249; schlie&szlig;en</button><span class=mlab>Aufnahmen</span></div>
-  <iframe id=recframe class=recframe title=Aufnahmen></iframe>
 </div>
 </div>
 
@@ -564,14 +557,6 @@ const bmute=$('bmute');let muteTs=0;bmute._on=false;
 bmute._set=v=>{bmute._on=v;bmute.classList.toggle('on',v);};
 bmute.addEventListener('click',async()=>{muteTs=Date.now();bmute._set(!bmute._on);
   try{await fetch('/api/mute?on='+(bmute._on?1:0),{method:'POST'});}catch(e){}});
-
-$('breplay').addEventListener('click',()=>{$('reclist').classList.toggle('open');});
-
-function toggleRec(){const p=$('recpanel');const open=p.classList.toggle('on');
-  if(open){if(!$('recframe').src)$('recframe').src='/rec/';
-    $('recbtn').textContent='♫ Aufnahmen ausblenden';
-    setTimeout(()=>p.scrollIntoView({behavior:'smooth',block:'nearest'}),60);}
-  else{$('recbtn').textContent='♫ Aufnahmen anzeigen';}}
 
 async function poll(){try{const r=await fetch('/api/state');const s=await r.json();
   if(s.delay!=null)setFader('delay',s.delay);
@@ -615,66 +600,8 @@ async function lvlPoll(){try{const r=await fetch('/api/level');const s=await r.j
   if(raw>RX_THRESH){rxOn=true;rxTs=now;}
   else if(now-rxTs>800){rxOn=false;}        // kurzes Nachleuchten gegen Flackern
   $('rxind').classList.toggle('on',rxOn);
-  updatePlay(s.play);
 }catch(e){}}
-
-let playing=false, activeName=null;
-async function stopPlay(){try{await fetch('/api/stop',{method:'POST'});}catch(e){}}
-function updatePlay(p){
-  const was=playing; playing=!!p; const list=$('reclist'); if(!list)return;
-  if(!p){ if(was){list.querySelectorAll('.vu').forEach(e=>{e.parentElement.classList.remove('vuon');e.remove();});activeName=null;recPoll();} return; }
-  if(!activeName)return;
-  const row=list.querySelector('.rec[data-name="'+activeName+'"]'); if(!row)return;
-  let ov=row.querySelector('.vu');
-  if(!ov){ov=document.createElement('div');ov.className='vu';ov.title='Wiedergabe stoppen';
-    ov.onclick=e=>{e.stopPropagation();stopPlay();};row.classList.add('vuon');row.appendChild(ov);}
-  const env=p.env||[], frac=p.dur>0?Math.min(1,p.pos/p.dur):0;
-  const bars=env.length?env.map((v,i)=>{const on=(i+0.5)/env.length<=frac;const h=Math.max(12,Math.round(v*100));
-    return '<span style="flex:1;height:'+h+'%;background:'+(on?'#9affc7':'#33564a')+';border-radius:1px"></span>';}).join('')
-    :'<span style="color:#9affc7;font-size:12px">spielt &hellip;</span>';
-  ov.innerHTML='<span style="color:#ff9a9a;font-size:14px;flex:none">&#9632;</span>'
-    +'<span style="flex:1;display:flex;align-items:flex-end;gap:1px;height:22px;min-width:0">'+bars+'</span>'
-    +(p.dur?'<span style="flex:none;color:#9affc7;font-size:11px">'+Math.round(p.pos)+' / '+Math.round(p.dur)+' s</span>':'');
-}
 lvlPoll();setInterval(lvlPoll,120);
-
-const PRIDE=['#e40303','#ff8c00','#ffed00','#22c55e','#2563eb','#750787'];
-function agefmt(s){
-  const p=n=>String(n).padStart(2,'0');
-  if(s<60)return 'vor '+s+' sek';
-  const m=Math.floor(s/60);
-  if(m<60)return 'vor '+m+' min';
-  const h=Math.floor(m/60), rm=m%60;
-  if(h<24)return 'vor '+h+':'+p(rm)+' Std';
-  const d=Math.floor(h/24), rh=h%24;
-  return 'vor '+d+' T '+rh+':'+p(rm)+' Std';
-}
-async function recPoll(){if(playing)return;   // waehrend Wiedergabe Liste nicht neu aufbauen (VU-Overlay)
-  try{const r=await fetch('/api/recs');const list=await r.json();
-  const c=$('reclist');if(!c)return;
-  if(!list.length){c.innerHTML='<div class=rec style="opacity:.5;border-left-color:#444">noch keine</div>';return;}
-  c.innerHTML=list.map((x,i)=>{const col=PRIDE[i%PRIDE.length];
-    const n=x.name.replace(/'/g,"\\'");
-    return '<div class="rec'+(x.noise?' noise':'')+'" data-name="'+x.name+'" style="border-left-color:'+col+'" onclick="replayFile(this,\''+n+'\')">'
-      +'<span class=len>'+x.sec+' s</span>'
-      +'<span class=verw>'+(x.noise?'verworfen':'')+'</span>'
-      +'<span class=sp></span>'
-      +'<span class=age>'+agefmt(x.age)+'</span>'
-      +'<span class=sp></span>'
-      +'<span class=tim>'+(x.t||'')+'</span>'
-      +'<button class="ic good'+(x.noise?'':' cur')+'" title="Sprache (behalten)" onclick="event.stopPropagation();classify(\''+n+'\',\'speech\')">&#10003;</button>'
-      +'<button class="ic bad'+(x.noise?' cur':'')+'" title="St&ouml;rung (verwerfen)" onclick="event.stopPropagation();classify(\''+n+'\',\'noise\')">&#10007;</button>'
-      +'</div>';}).join('');
-}catch(e){}}
-recPoll();setInterval(recPoll,5000);
-
-async function replayFile(el,name){
-  activeName=name;   // Anzeigeort fuers VU = diese Zeile
-  try{await fetch('/api/replay?file='+encodeURIComponent(name),{method:'POST'});}catch(e){}}
-
-async function classify(name,as){
-  try{await fetch('/api/classify?file='+encodeURIComponent(name)+'&as='+as,{method:'POST'});}catch(e){}
-  recPoll();}
 </script></body></html>'''
 
 class H(BaseHTTPRequestHandler):

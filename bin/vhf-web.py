@@ -154,8 +154,11 @@ def owntone_update():
     except Exception:
         pass
 
-def page():
+def page(embed=False):
     ship = html.escape(shipname())
+    # Eingebettet (im Panel-iframe): eigene Titelzeile weglassen (kein Doppelkopf).
+    hdr = "" if embed else ("<h1>&#9875;&nbsp; " + ship + " &middot; Audio</h1>"
+                            "<div class=sub>VHF &middot; NACHH&Ouml;REN</div>")
     rows = []
     for f in recordings():
         base = f[4:-4]
@@ -227,8 +230,7 @@ def page():
             ".bar .hide{background:#5a1d1d;color:#ffd9d9}"
             "details{margin-top:1.2em}summary{cursor:pointer;color:#8fa2b6}audio{width:100%;margin-top:.5em}"
             "</style></head><body>"
-            "<h1>&#9875;&nbsp; " + ship + " &middot; Audio</h1>"
-            "<div class=sub>VHF &middot; NACHH&Ouml;REN</div>"
+            + hdr +
             "<div class=panel>"
             "<p class=hint>Antippen zum Abh&ouml;ren &middot; &#11015; Download &middot; &#10005; einzeln ausblenden &middot; "
             "&#9744; Mehrfachauswahl. Ausgeblendete werden beim Verlassen nur versteckt &ndash; nichts wird gel&ouml;scht.</p>"
@@ -272,7 +274,11 @@ class H(BaseHTTPRequestHandler):
         p = urllib.parse.urlparse(self.path)
         name = urllib.parse.unquote(p.path.lstrip("/"))
         if p.path in ("/", "") or p.path == "/label":
-            b = (label_page() if p.path == "/label" else page()).encode()
+            if p.path == "/label":
+                b = label_page().encode()
+            else:
+                embed = "embed" in urllib.parse.parse_qs(p.query)
+                b = page(embed).encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
