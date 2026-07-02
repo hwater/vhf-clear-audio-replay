@@ -558,14 +558,16 @@ function toggleCompact(){
 function toggleRecs(){                   // Aufnahmen-Liste ein-/ausklappen; lazy beim 1. Mal
   const b=$('recbtn'), w=$('recwrap'), f=$('recframe'), sp=$('recspin');
   const open = (w.style.display==='none' || !w.style.display);
-  const CH=' &#9662;', UP=' &#9652;', LBL='&#9835; Nachhören letzte Funksprüche';
+  const CH=' &#9662;', UP=' &#9652;', LBL='&#9835; Alle Aufnahmen &ndash; am Ger&auml;t anh&ouml;ren';
   if(open){
     w.style.display='block'; b.innerHTML=LBL+UP;
     if(!f.getAttribute('src')){          // erst beim ersten Öffnen laden (Warte-Cursor)
       sp.style.display='block'; f.style.display='none'; document.body.style.cursor='progress';
-      f.onload=function(){sp.style.display='none'; f.style.display='block'; document.body.style.cursor='';};
+      f.onload=function(){sp.style.display='none'; f.style.display='block'; document.body.style.cursor='';
+        b.scrollIntoView({block:'start'});};        // nach dem Laden Ansicht oben zeigen
       f.src='/rec/?embed=1';
     }
+    setTimeout(function(){b.scrollIntoView({behavior:'smooth',block:'start'});},60);
   } else {
     w.style.display='none'; b.innerHTML=LBL+CH;
   }}
