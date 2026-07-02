@@ -2,7 +2,7 @@
 # Kopieren nach  /etc/vhf/vhf.conf  (wird ohne Neustart gelesen).
 # Format: key = value ; Zeilen mit # sind Kommentare.
 
-# Schiffsname in den Titelzeilen von Nachhör-Liste (:8088) und Panel (:8090).
+# Schiffsname in den Titelzeilen von Panel (:8090) und Nachhör-Liste.
 #   auto        = aus Signal K holen (vessels.self.name), sonst Fallback "Wilhelmina"
 #   <Name>      = fester Name (überschreibt Signal K)
 shipname = auto

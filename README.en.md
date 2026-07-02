@@ -19,8 +19,8 @@ download and triage.
 - **Automatic interference detection:** a classifier separates real speech from
   carriers/noise using the speech *rhythm* (gain-independent). Noise is hidden, not
   deleted — recoverable.
-- **Web replay** (port 8088): responsive list for listening on the phone, single-file
-  download, multi-select to hide, and an expandable section for sorted-out noise.
+- **Web replay** (port 8088): responsive list for listening on the phone — per row a
+  play button, waveform/VU overview, **gut**/**Störung** classify toggle, and download.
 - **Automatic cleanup:** noise older than 1 day, recordings older than 7 days.
 
 ## Architecture

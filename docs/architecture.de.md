@@ -69,10 +69,13 @@ sehr kurze Clips → KEEP). Entscheidungen landen in `/run/vhf/classify.log`.
 
 Ein stdlib-`ThreadingHTTPServer` auf **:8088**, kein Framework, kein root:
 
-- **Liste** neueste zuerst; jede Zeile mit `<audio controls>` (Streaming vom Server),
-  Dauer-Schätzung, Download-Link, Einzel-Ausblenden und Mehrfach-Auswahl.
-- **Ausblenden** verschiebt nach `.noise-*` (versteckt, nicht gelöscht); aussortierte
-  Störungen sind in einem ausklappbaren Bereich anzuhören und als „echt" zurückholbar.
+- **Liste** neueste zuerst (echte + aussortierte in einer Liste). Jede Zeile hat: eine
+  **Play**-Taste (Wiedergabe im Browser), eine **Wellenform/VU-Übersicht** (Hüllkurve via
+  `GET env?f=`, füllt sich mit dem Abspiel-Fortschritt), einen **gut** / **Störung**-Umschalter
+  (Einordnung) und einen **Download**-Link.
+- **Einordnen** (`POST classify?f=&as=speech|noise`) benennt die Datei zwischen `VHF_*`
+  (gut) und `.noise-VHF_*` (Störung/versteckt) um; der Zustand steckt im Dateinamen, die
+  Zeile hebt den aktiven Button hervor. Störung wird versteckt, nicht gelöscht (Cleanup entfernt sie).
 - Löschen/Verschieben läuft über **Verzeichnisrechte** (Ordner `group audio`,
   group-writable) – der Dienst läuft als `DynamicUser` in Gruppe `audio`, nie als root.
 - Pfad-Sicherheit: nur Dateinamen `VHF_*.mp3` / `.noise-VHF_*.mp3`, kein `/` oder `\`.

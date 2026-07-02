@@ -2,7 +2,7 @@
 # VHF-Aufnahmen: Web-Liste. Abspielen, Download, und Markieren (ausgrauen) ohne
 # Nachfrage; beim Verlassen der Seite werden die markierten geloescht.
 # Laeuft OHNE root (in Gruppe audio); Loeschen via Verzeichnisrechte.
-import os, html, json, time, urllib.parse, urllib.request
+import os, re, html, json, time, subprocess, urllib.parse, urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 DIR = os.environ.get("VHF_DIR", "/srv/music/VHF-Aufnahmen")
@@ -154,48 +154,104 @@ def owntone_update():
     except Exception:
         pass
 
+def _dt(f):
+    m = re.search(r"(\d{4})-(\d{2})-(\d{2})_(\d{2})-(\d{2})-(\d{2})", f)
+    if not m:
+        return ("", "")
+    return ("%s-%s-%s" % (m.group(1), m.group(2), m.group(3)),
+            "%s:%s:%s" % (m.group(4), m.group(5), m.group(6)))
+
+def all_recs(limit=80):
+    # echte + aussortierte Aufnahmen in EINER Liste, neueste zuerst.
+    try:
+        fs = [f for f in os.listdir(DIR) if f.endswith(".mp3")
+              and (f.startswith("VHF_") or f.startswith(".noise-VHF_"))]
+    except Exception:
+        fs = []
+    def mt(f):
+        try:
+            return os.path.getmtime(os.path.join(DIR, f))
+        except Exception:
+            return 0
+    fs.sort(key=mt, reverse=True)
+    return fs[:limit]
+
+_env_cache = {}
+
+def compute_env(name):
+    # Huellkurve (48 Balken, 0..1) fuer die VU-Uebersicht pro Zeile; gecacht.
+    if name in _env_cache:
+        return _env_cache[name]
+    res = {"dur": 0, "env": []}
+    try:
+        import numpy as np
+        path = os.path.join(DIR, name)
+        p = subprocess.run(["ffmpeg", "-v", "quiet", "-i", path, "-ac", "1",
+                            "-ar", "8000", "-f", "s16le", "-"],
+                           capture_output=True, timeout=20)
+        x = np.frombuffer(p.stdout, dtype=np.int16).astype(np.float32) / 32768.0
+        dur = len(x) / 8000.0
+        N = 48
+        segs = np.array_split(np.abs(x), N) if len(x) >= N else [np.abs(x)]
+        env = [float(np.sqrt(np.mean(s * s + 1e-9))) for s in segs]
+        mx = max(env) or 1.0
+        res = {"dur": round(dur, 2), "env": [round(min(1.0, e / mx), 3) for e in env]}
+    except Exception:
+        res = {"dur": 0, "env": []}
+    if len(_env_cache) > 300:
+        _env_cache.clear()
+    _env_cache[name] = res
+    return res
+
+def classify_file(name, as_):
+    # VHF_x.mp3  <->  .noise-VHF_x.mp3  (gut / Stoerung), Zustand steckt im Namen.
+    if "/" in name or "\\" in name or not name.endswith(".mp3"):
+        return None
+    if name.startswith(".noise-VHF_"):
+        bare = name[len(".noise-"):]
+    elif name.startswith("VHF_"):
+        bare = name
+    else:
+        return None
+    dst = (".noise-" + bare) if as_ == "noise" else bare
+    src = os.path.join(DIR, name); dstp = os.path.join(DIR, dst)
+    if not os.path.isfile(src):
+        return None
+    if src != dstp:
+        try:
+            os.replace(src, dstp)
+            owntone_update()
+        except Exception:
+            return None
+    return {"name": dst, "noise": dst.startswith(".noise-")}
+
 def page(embed=False):
     ship = html.escape(shipname())
     # Eingebettet (im Panel-iframe): eigene Titelzeile weglassen (kein Doppelkopf).
     hdr = "" if embed else ("<h1>&#9875;&nbsp; " + ship + " &middot; Audio</h1>"
                             "<div class=sub>VHF &middot; NACHH&Ouml;REN</div>")
     rows = []
-    for f in recordings():
-        base = f[4:-4]
-        d, _, t = base.partition("_")
-        t = t.replace("-", ":")
+    for f in all_recs():
+        noise = f.startswith(".noise-")
+        d, t = _dt(f)
         du = dur_str(os.path.join(DIR, f))
         fe = html.escape(f)
         rows.append(
-            "<li data-f=\"%s\"><div class=hd>"
-            "<span class=cb onclick=\"sel(event,this)\"></span>"
-            "<button class=del onclick=\"mark(this)\">&#10005;</button>"
-            "<span class=t>%s&nbsp;&nbsp;%s</span>"
-            "<span class=s>%s</span>"
-            "<a class=dl href=\"%s\" download>&#11015;</a></div>"
-            "<audio controls preload=none src=\"%s\"></audio></li>"
-            % (fe, html.escape(d), html.escape(t), du, fe, fe))
+            "<li class=\"rec%s\" data-f=\"%s\" data-noise=\"%d\">"
+            "<div class=hd><span class=t>%s&nbsp;&nbsp;%s</span><span class=s>%s</span></div>"
+            "<div class=ctl>"
+            "<button class=play aria-label=Abspielen onclick=\"play(this)\">&#9654;</button>"
+            "<div class=vu></div>"
+            "<button class=\"cl gut%s\" onclick=\"cls(this,'speech')\">gut</button>"
+            "<button class=\"cl st%s\" onclick=\"cls(this,'noise')\">St&ouml;rung</button>"
+            "<a class=dlb href=\"%s\" download title=Download>&#11015;</a>"
+            "</div>"
+            "<audio preload=none src=\"%s\"></audio></li>"
+            % (" noise" if noise else "", fe, 1 if noise else 0,
+               html.escape(d), html.escape(t), du,
+               "" if noise else " on", " on" if noise else "", fe, fe))
     if not rows:
-        rows = ["<li class=s>Noch keine Aufnahmen.</li>"]
-
-    nrows = []
-    for f in noise_list():
-        base = f[len(".noise-VHF_"):-4]
-        d, _, t = base.partition("_")
-        t = t.replace("-", ":")
-        fe = html.escape(f)
-        du = dur_str(os.path.join(DIR, f))
-        nrows.append(
-            "<li data-f=\"%s\"><div class=hd>"
-            "<span class=t>%s&nbsp;&nbsp;%s</span><span class=s>St&ouml;rung &middot; %s</span></div>"
-            "<audio controls preload=none src=\"%s\"></audio>"
-            "<button class=res onclick=\"restore(this)\">&#8617; echte Sprache</button></li>"
-            % (fe, html.escape(d), html.escape(t), du, fe))
-    noise_section = ""
-    if nrows:
-        noise_section = ("<details><summary class=s>Aussortiert / ausgeblendet (%d) &ndash; "
-                         "anh&ouml;ren / als echt zur&uuml;ckholen</summary><ul id=noise>%s</ul></details>"
-                         % (len(nrows), "".join(nrows)))
+        rows = ["<li class=s style=\"text-align:center;color:#8fa2b6\">Noch keine Aufnahmen.</li>"]
 
     return ("<!doctype html><html lang=de><head><meta charset=utf-8>"
             "<meta name=viewport content=\"width=device-width,initial-scale=1\">"
@@ -208,64 +264,65 @@ def page(embed=False):
             "h1{font-size:14px;letter-spacing:.3em;font-weight:600;color:#bcd2e6;margin:2px 0 0;"
             "text-transform:uppercase;text-align:center}"
             ".sub{font-size:10px;color:#6f8497;letter-spacing:.18em;text-align:center;margin:2px 0 16px}"
-            ".panel{max-width:560px;margin:0 auto}"
+            ".panel{max-width:620px;margin:0 auto}"
             ".hint{font-size:12px;color:#9aa3bd;line-height:1.5;margin:0 0 14px;text-align:center}"
             "ul{padding:0;margin:0;list-style:none}"
             "li{background:#111a24;border:1px solid #20303d;border-radius:12px;padding:.6em .8em;margin:.55em 0}"
-            "li.marked{opacity:.4}li.marked .t{text-decoration:line-through}"
-            ".hd{display:flex;align-items:center;gap:10px}.t{font-weight:600;color:#eaf2fa}"
-            ".s{color:#8fa2b6;font-size:.85em;font-variant-numeric:tabular-nums}"
-            ".dl{margin-left:auto;color:var(--accent);text-decoration:none;font-size:1.25em}"
-            ".del{background:#5a1d1d;color:#ffd9d9;border:1px solid #9c3b3b;border-radius:7px;width:34px;height:30px;font-size:15px}"
-            ".del:active{background:#7a2626}li.marked .del{background:#20303d;color:#9aa3bd;border-color:#2a3a49}"
-            ".res{display:block;width:100%;margin-top:.5em;background:linear-gradient(#163b2a,#0f261c);color:#d9ffe9;"
-            "border:1px solid #2f7d53;border-radius:9px;padding:.7em;font-size:15px;font-weight:600;letter-spacing:.02em}.res:active{background:#0f261c}"
-            ".cb{flex:0 0 auto;width:22px;height:22px;border:2px solid #3a4a63;border-radius:5px;cursor:pointer}"
-            "li.sel .cb{background:var(--accent);border-color:var(--accent)}li.sel{outline:2px solid var(--accent)}"
-            ".bar{position:sticky;top:8px;z-index:5;background:rgba(11,18,26,.92);backdrop-filter:blur(6px);"
-            "border:1px solid #20303d;border-radius:12px;padding:.5em .7em;margin-bottom:.5em;"
-            "display:none;align-items:center;gap:8px;flex-wrap:wrap}.bar.on{display:flex}"
-            ".bar .cnt{font-weight:600;color:var(--accent)}.bar button{background:#1d3a5a;color:#cfe6ff;border:none;"
-            "border-radius:8px;padding:.5em .8em;font-size:14px}.bar .rng.active{background:#2f7d53;color:#dfffe9}"
-            ".bar .hide{background:#5a1d1d;color:#ffd9d9}"
-            "details{margin-top:1.2em}summary{cursor:pointer;color:#8fa2b6}audio{width:100%;margin-top:.5em}"
+            "li.noise{opacity:.72}"
+            ".hd{display:flex;align-items:baseline;gap:10px}.t{font-weight:600;color:#eaf2fa}"
+            ".s{color:#8fa2b6;font-size:.85em;font-variant-numeric:tabular-nums;margin-left:auto}"
+            ".ctl{display:flex;align-items:center;gap:8px;margin-top:.55em}"
+            ".play{flex:none;width:42px;height:42px;border-radius:50%;border:1px solid #2f4a63;"
+            "background:linear-gradient(#16222e,#0d161e);color:var(--accent);font-size:15px;cursor:pointer}"
+            ".play.playing{color:#9affc7;border-color:#2f7d53;background:linear-gradient(#163b2a,#0f261c)}"
+            ".vu{flex:1;min-width:0;height:42px;display:flex;align-items:flex-end;gap:1px;overflow:hidden;"
+            "background:#0b141c;border:1px solid #20303d;border-radius:8px;padding:3px}"
+            ".vu .b{flex:1;min-width:1px;background:#33564a;border-radius:1px;min-height:2px;transition:background .05s}"
+            ".vu .b.on{background:var(--accent)}"
+            ".cl{flex:none;border-radius:8px;padding:0 .7em;height:42px;font-size:13px;font-weight:600;"
+            "background:#0e1922;color:#9fb4c6;border:1px solid #2a3a49;cursor:pointer}"
+            ".gut.on{background:#163b2a;color:#9affc7;border-color:#2f7d53}"
+            ".st.on{background:#5a1d1d;color:#ffd9d9;border-color:#9c3b3b}"
+            ".dlb{flex:none;width:42px;height:42px;display:flex;align-items:center;justify-content:center;"
+            "color:var(--accent);text-decoration:none;font-size:1.2em;background:#0e1922;border:1px solid #2a3a49;border-radius:8px}"
+            "@media(max-width:480px){.cl{padding:0 .5em;font-size:12px}.play,.vu,.cl,.dlb{height:38px}.play,.dlb{width:38px}}"
             "</style></head><body>"
             + hdr +
             "<div class=panel>"
-            "<p class=hint>Antippen zum Abh&ouml;ren &middot; &#11015; Download &middot; &#10005; einzeln ausblenden &middot; "
-            "&#9744; Mehrfachauswahl. Ausgeblendete werden beim Verlassen nur versteckt &ndash; nichts wird gel&ouml;scht.</p>"
-            "<div class=bar id=bar><span class=cnt id=cnt>0 ausgew&auml;hlt</span>"
-            "<button class=rng id=rng onclick=\"toggleRange(this)\">&#8597; Bereich</button>"
-            "<button class=hide onclick=\"hideSel()\">Ausblenden</button>"
-            "<button onclick=\"clearSel()\">Aufheben</button></div>"
-            "<ul id=list>" + "".join(rows) + "</ul>" + noise_section + "</div>" +
+            "<p class=hint>&#9654; Abspielen &middot; Wellenform &middot; <b>gut</b>/<b>St&ouml;rung</b> einordnen &middot; &#11015; Download</p>"
+            "<ul id=list>" + "".join(rows) + "</ul></div>"
             "<script>"
-            "var items=[].slice.call(document.querySelectorAll('#list>li'));"
-            "var anchor=-1,rangeMode=false;"
-            "function updBar(){var s=document.querySelectorAll('#list>li.sel').length;"
-            "document.getElementById('bar').classList.toggle('on',s>0);"
-            "document.getElementById('cnt').textContent=s+' ausgew\\u00e4hlt';}"
-            "function sel(e,el){var li=el.closest('li');var i=items.indexOf(li);"
-            "if((e.shiftKey||rangeMode)&&anchor>=0){var lo=Math.min(anchor,i),hi=Math.max(anchor,i);"
-            "for(var k=lo;k<=hi;k++)items[k].classList.add('sel');}"
-            "else{li.classList.toggle('sel');}anchor=i;updBar();}"
-            "function hideSel(){[].slice.call(document.querySelectorAll('#list>li.sel')).forEach(function(li){"
-            "li.classList.add('marked');li.classList.remove('sel');var a=li.querySelector('audio');"
-            "if(a){a.pause();}});anchor=-1;updBar();}"
-            "function clearSel(){[].slice.call(document.querySelectorAll('#list>li.sel')).forEach("
-            "function(li){li.classList.remove('sel');});updBar();}"
-            "function toggleRange(b){rangeMode=!rangeMode;b.classList.toggle('active',rangeMode);}"
-            "function mark(btn){var li=btn.closest('li');li.classList.toggle('marked');"
-            "if(li.classList.contains('marked')){var a=li.querySelector('audio');"
-            "if(a){a.pause();try{a.currentTime=0;}catch(e){}}}}"
-            "function commit(){var m=[].slice.call(document.querySelectorAll('li.marked'))"
-            ".map(function(li){return li.dataset.f;});"
-            "if(m.length){try{navigator.sendBeacon('commit',JSON.stringify(m));}catch(e){}}}"
-            "window.addEventListener('pagehide',commit);"
-            "window.addEventListener('beforeunload',commit);"
-            "async function restore(btn){var li=btn.closest('li');"
-            "var r=await fetch('restore?f='+encodeURIComponent(li.dataset.f),{method:'POST'});"
-            "if(r.ok){li.remove();}else{alert('Wiederherstellen fehlgeschlagen');}}"
+            "var q=function(s,r){return (r||document).querySelector(s);};"
+            "var curA=null;"
+            "function bars(vu,env){vu.innerHTML='';"
+            "var a=(env&&env.length)?env:[];if(!a.length){for(var i=0;i<40;i++)a.push(0.12);}"
+            "a.forEach(function(v){var b=document.createElement('span');b.className='b';"
+            "b.style.height=Math.max(2,Math.round(v*100))+'%';vu.appendChild(b);});}"
+            "function setProg(vu,frac){var bs=vu.querySelectorAll('.b');var idx=Math.round(frac*bs.length);"
+            "for(var i=0;i<bs.length;i++)bs[i].classList.toggle('on',i<idx);}"
+            "async function loadEnv(li){if(li._env)return;li._env=1;var vu=q('.vu',li);"
+            "try{var r=await fetch('env?f='+encodeURIComponent(li.dataset.f));var d=await r.json();"
+            "if(d&&d.env&&d.env.length)bars(vu,d.env);}catch(e){}}"
+            "var io=new IntersectionObserver(function(es){es.forEach(function(e){"
+            "if(e.isIntersecting){loadEnv(e.target);io.unobserve(e.target);}});},{rootMargin:'150px'});"
+            "document.querySelectorAll('#list>li.rec').forEach(function(li){"
+            "bars(q('.vu',li),null);io.observe(li);"
+            "var a=q('audio',li),btn=q('.play',li),vu=q('.vu',li);"
+            "a.addEventListener('play',function(){if(curA&&curA!==a)curA.pause();curA=a;"
+            "btn.classList.add('playing');btn.innerHTML='&#9208;';});"
+            "a.addEventListener('pause',function(){btn.classList.remove('playing');btn.innerHTML='&#9654;';});"
+            "a.addEventListener('ended',function(){setProg(vu,0);});"
+            "a.addEventListener('timeupdate',function(){if(a.duration)setProg(vu,a.currentTime/a.duration);});"
+            "});"
+            "function play(btn){var a=q('audio',btn.closest('li'));if(a.paused){a.play();}else{a.pause();}}"
+            "async function cls(btn,as){var li=btn.closest('li');"
+            "var r=await fetch('classify?f='+encodeURIComponent(li.dataset.f)+'&as='+as,{method:'POST'});"
+            "if(!r.ok)return;var d=await r.json();if(!d.name)return;"
+            "li.dataset.f=d.name;li.dataset.noise=d.noise?'1':'0';"
+            "q('audio',li).src=d.name;q('.dlb',li).setAttribute('href',d.name);"
+            "li.classList.toggle('noise',!!d.noise);"
+            "q('.gut',li).classList.toggle('on',!d.noise);"
+            "q('.st',li).classList.toggle('on',!!d.noise);}"
             "</script></body></html>")
 
 class H(BaseHTTPRequestHandler):
@@ -284,6 +341,17 @@ class H(BaseHTTPRequestHandler):
             self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
             self.send_header("Content-Length", str(len(b)))
             self.end_headers(); self.wfile.write(b)
+        elif p.path == "/env":
+            q = urllib.parse.parse_qs(p.query)
+            f = q.get("f", [""])[0]
+            if safe(f) or safe_noise(f):
+                b = json.dumps(compute_env(f)).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(b)))
+                self.end_headers(); self.wfile.write(b)
+            else:
+                self.send_response(404); self.end_headers()
         elif safe(name) or safe_noise(name):
             fp = os.path.join(DIR, name)
             self.send_response(200)
@@ -299,7 +367,16 @@ class H(BaseHTTPRequestHandler):
             self.send_response(404); self.end_headers()
     def do_POST(self):
         p = urllib.parse.urlparse(self.path)
-        if p.path == "/commit":
+        if p.path == "/classify":
+            q = urllib.parse.parse_qs(p.query)
+            f = q.get("f", [""])[0]; as_ = q.get("as", [""])[0]
+            res = classify_file(f, as_) if as_ in ("speech", "noise") else None
+            b = json.dumps(res or {}).encode()
+            self.send_response(200 if res else 400)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(b)))
+            self.end_headers(); self.wfile.write(b)
+        elif p.path == "/commit":
             try:
                 n = int(self.headers.get("Content-Length", 0))
                 names = json.loads(self.rfile.read(n) or b"[]")

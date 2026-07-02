@@ -19,8 +19,8 @@ Herunterladen und Aussortieren bereitstellt.
 - **Automatische Störungs-Erkennung:** ein Klassifikator trennt echte Sprache von
   Trägern/Rauschen anhand des Sprach-Rhythmus (gain-unabhängig). Störungen werden
   versteckt, nicht gelöscht – rückholbar.
-- **Web-Replay** (Port 8088): responsive Liste zum Anhören am Handy, Einzel-Download,
-  Mehrfach-Auswahl zum Ausblenden, aussortierte Störungen ausklappbar.
+- **Web-Replay** (Port 8088): responsive Liste zum Anhören am Handy — pro Zeile
+  Play-Taste, Wellenform/VU-Übersicht, **gut**/**Störung**-Einordnung und Download.
 - **Automatische Aufräumung:** Störungen > 1 Tag, Aufnahmen > 7 Tage werden gelöscht.
 
 ## Architektur

@@ -69,10 +69,13 @@ loudness envelope rather than absolute levels:
 
 A stdlib `ThreadingHTTPServer` on **:8088**, no framework, no root:
 
-- **List** newest first; each row with `<audio controls>` (streamed from the server),
-  duration estimate, download link, single-hide and multi-select.
-- **Hiding** moves to `.noise-*` (hidden, not deleted); sorted-out noise is listenable in
-  an expandable section and can be restored as "real".
+- **List** newest first (good + sorted-out in one list). Each row has: a **play**
+  button (in-browser playback), a **waveform/VU overview** (envelope from `GET env?f=`,
+  fills with playback progress), a **gut** / **Störung** toggle (classify), and a
+  **download** link.
+- **Classify** (`POST classify?f=&as=speech|noise`) renames the file between `VHF_*`
+  (good) and `.noise-VHF_*` (Störung/hidden); the state lives in the filename and the
+  row highlights the active button. Noise is hidden, not deleted (cleanup removes it).
 - Deleting/moving goes through **directory permissions** (folder `group audio`,
   group-writable) — the service runs as a `DynamicUser` in group `audio`, never as root.
 - Path safety: only file names `VHF_*.mp3` / `.noise-VHF_*.mp3`, no `/` or `\`.
