@@ -492,16 +492,15 @@ input[type=range]::-moz-range-thumb{width:26px;height:26px;border-radius:50%;bac
 <div class=sub id=sub>VHF-MONITOR &amp; AIRPLAY</div>
 <div class=panel>
 
-  <button class=recbtn id=recbtn onclick="toggleRecs()">&#9835; Nachh&ouml;ren letzte Funkspr&uuml;che &#9662;</button>
-  <div id=recwrap style="display:none">
-    <div id=recspin style="text-align:center;padding:1.2em;color:#8fa2b6"><span class=spin></span> l&auml;dt &hellip;</div>
-    <iframe id=recframe class=recframe title=Aufnahmen style="display:none"></iframe>
-  </div>
-
   <div class=card>
     <div class=mlab style="display:flex;justify-content:space-between;align-items:center">
       <span>Funk-Pegel</span><span id=rxind class=rxind>FUNK AKTIV</span></div>
     <div class="meter vu"><div id=lvl></div><span id=pk class=pk></span></div>
+  </div>
+
+  <div class=card id=reccard>
+    <div class=mlab>&#9835; Nachh&ouml;ren letzte Funkspr&uuml;che <span style="color:#6f8497;text-transform:none;letter-spacing:0">&middot; auf die HomePods</span></div>
+    <div id=reclist class="reclist open"></div>
   </div>
 
   <div class=card>
@@ -520,6 +519,12 @@ input[type=range]::-moz-range-thumb{width:26px;height:26px;border-radius:50%;bac
     <div class=btns><button class=tg id=bmute><span class=dot></span>Funk nachh&ouml;ren<span class=sub2>nicht live &ndash; nur sp&auml;ter nachh&ouml;ren</span></button></div>
     <div class=desc>Echter Funk wird kurz auf die HomePods gespielt (in dieser Lautst&auml;rke), dann wieder freigegeben. St&ouml;rungen werden ignoriert. Bei <b>nachh&ouml;ren</b> l&auml;uft die Aufnahme + das VU-Meter weiter, aber die HomePods bleiben live unber&uuml;hrt &ndash; du h&ouml;rst den Funk &uuml;ber die Aufnahmen-Liste nach.</div>
     <div id=shipodstat class=shipodstat></div>
+  </div>
+
+  <button class=recbtn id=recbtn onclick="toggleRecs()">&#9835; Alle Aufnahmen &ndash; am Ger&auml;t anh&ouml;ren &#9662;</button>
+  <div id=recwrap style="display:none">
+    <div id=recspin style="text-align:center;padding:1.2em;color:#8fa2b6"><span class=spin></span> l&auml;dt &hellip;</div>
+    <iframe id=recframe class=recframe title=Aufnahmen style="display:none"></iframe>
   </div>
 
 </div>
@@ -571,8 +576,9 @@ async function poll(){try{const r=await fetch('/api/state');const s=await r.json
   renderPods(s.shipods||[]);
 }catch(e){}}
 
-function applyPods(on){                 // keine HomePods an Bord -> nur Messe zeigen
+function applyPods(on){                 // keine HomePods an Bord -> HomePod-Teile ausblenden
   const hp=$('hpcard'); if(hp) hp.style.display=on?'':'none';
+  const rc=$('reccard'); if(rc) rc.style.display=on?'':'none';   // Kompakt-Liste spielt auf HomePods
   const sub=$('sub'); if(sub) sub.textContent=on?'VHF-MONITOR · AIRPLAY':'VHF-MONITOR · MESSE';}
 
 function toggleRecs(){                   // Aufnahmen-Liste ein-/ausklappen; lazy beim 1. Mal
@@ -617,8 +623,64 @@ async function lvlPoll(){try{const r=await fetch('/api/level');const s=await r.j
   if(raw>RX_THRESH){rxOn=true;rxTs=now;}
   else if(now-rxTs>800){rxOn=false;}        // kurzes Nachleuchten gegen Flackern
   $('rxind').classList.toggle('on',rxOn);
+  updatePlay(s.play);
 }catch(e){}}
 lvlPoll();setInterval(lvlPoll,120);
+
+// ---- Kompakte Liste (oben): tippen = auf die HomePods spielen, + gut/Stoerung ----
+let playing=false, activeName=null;
+async function stopPlay(){try{await fetch('/api/stop',{method:'POST'});}catch(e){}}
+function updatePlay(p){
+  const was=playing; playing=!!p; const list=$('reclist'); if(!list)return;
+  if(!p){ if(was){list.querySelectorAll('.vu').forEach(e=>{e.parentElement.classList.remove('vuon');e.remove();});activeName=null;recPoll();} return; }
+  if(!activeName)return;
+  const row=list.querySelector('.rec[data-name="'+activeName+'"]'); if(!row)return;
+  let ov=row.querySelector('.vu');
+  if(!ov){ov=document.createElement('div');ov.className='vu';ov.title='Wiedergabe stoppen';
+    ov.onclick=e=>{e.stopPropagation();stopPlay();};row.classList.add('vuon');row.appendChild(ov);}
+  const env=p.env||[], frac=p.dur>0?Math.min(1,p.pos/p.dur):0;
+  const bars=env.length?env.map((v,i)=>{const on=(i+0.5)/env.length<=frac;const h=Math.max(12,Math.round(v*100));
+    return '<span style="flex:1;height:'+h+'%;background:'+(on?'#9affc7':'#33564a')+';border-radius:1px"></span>';}).join('')
+    :'<span style="color:#9affc7;font-size:12px">spielt &hellip;</span>';
+  ov.innerHTML='<span style="color:#ff9a9a;font-size:14px;flex:none">&#9632;</span>'
+    +'<span style="flex:1;display:flex;align-items:flex-end;gap:1px;height:22px;min-width:0">'+bars+'</span>'
+    +(p.dur?'<span style="flex:none;color:#9affc7;font-size:11px">'+Math.round(p.pos)+' / '+Math.round(p.dur)+' s</span>':'');
+}
+const PRIDE=['#e40303','#ff8c00','#ffed00','#22c55e','#2563eb','#750787'];
+function agefmt(s){
+  const p=n=>String(n).padStart(2,'0');
+  if(s<60)return 'vor '+s+' sek';
+  const m=Math.floor(s/60);
+  if(m<60)return 'vor '+m+' min';
+  const h=Math.floor(m/60), rm=m%60;
+  if(h<24)return 'vor '+h+':'+p(rm)+' Std';
+  const d=Math.floor(h/24), rh=h%24;
+  return 'vor '+d+' T '+rh+':'+p(rm)+' Std';
+}
+async function recPoll(){if(playing)return;   // waehrend Wiedergabe Liste nicht neu aufbauen (VU-Overlay)
+  try{const r=await fetch('/api/recs');const list=await r.json();
+  const c=$('reclist');if(!c)return;
+  if(!list.length){c.innerHTML='<div class=rec style="opacity:.5;border-left-color:#444">noch keine</div>';return;}
+  c.innerHTML=list.map((x,i)=>{const col=PRIDE[i%PRIDE.length];
+    const n=x.name.replace(/'/g,"\\'");
+    return '<div class="rec'+(x.noise?' noise':'')+'" data-name="'+x.name+'" style="border-left-color:'+col+'" onclick="replayFile(this,\''+n+'\')">'
+      +'<span class=len>'+x.sec+' s</span>'
+      +'<span class=verw>'+(x.noise?'verworfen':'')+'</span>'
+      +'<span class=sp></span>'
+      +'<span class=age>'+agefmt(x.age)+'</span>'
+      +'<span class=sp></span>'
+      +'<span class=tim>'+(x.t||'')+'</span>'
+      +'<button class="ic good'+(x.noise?'':' cur')+'" title="Sprache (behalten)" onclick="event.stopPropagation();classify(\''+n+'\',\'speech\')">&#10003;</button>'
+      +'<button class="ic bad'+(x.noise?' cur':'')+'" title="St&ouml;rung (verwerfen)" onclick="event.stopPropagation();classify(\''+n+'\',\'noise\')">&#10007;</button>'
+      +'</div>';}).join('');
+}catch(e){}}
+recPoll();setInterval(recPoll,5000);
+async function replayFile(el,name){
+  activeName=name;   // Anzeigeort fuers VU = diese Zeile
+  try{await fetch('/api/replay?file='+encodeURIComponent(name),{method:'POST'});}catch(e){}}
+async function classify(name,as){
+  try{await fetch('/api/classify?file='+encodeURIComponent(name)+'&as='+as,{method:'POST'});}catch(e){}
+  recPoll();}
 </script></body></html>'''
 
 class H(BaseHTTPRequestHandler):
