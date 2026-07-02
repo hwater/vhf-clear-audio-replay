@@ -1,5 +1,7 @@
 # VHF – clear Audio replay
 
+*🇩🇪 Deutsch · [🇬🇧 English](README.en.md)*
+
 **Marine-VHF-Funk mitschneiden und sauber nachhören.** Ein Raspberry-Pi-System, das
 den Ton aus einem VHF/UKW-Seefunkgerät über einen USB-Audio-Adapter abgreift, jeden
 Funkspruch als einzelne, entrauschte MP3 aufzeichnet und im Browser zum Nachhören,
