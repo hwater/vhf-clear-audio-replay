@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # VHF-/Audio-Bedienpanel (maritim) - Schieberegler + Anzeigen, Port 8090.
-import json, os, re, html, subprocess, threading, time, urllib.request, urllib.parse
+import json, os, re, html, subprocess, threading, time, urllib.request, urllib.parse, urllib.error
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 DELAY_FILE = "/var/lib/vhf/delay"
@@ -8,6 +8,7 @@ LEVEL_FILE = "/run/vhf/level"
 OWNTONE = "http://localhost:3689"
 DELAY_MIN, DELAY_MAX = 0.0, 30.0
 PORT = int(os.environ.get("VHF_PANEL_PORT", "8090"))
+WEB_PORT = int(os.environ.get("VHF_WEB_PORT", "8088"))   # interne Nachhoer-Liste (Proxy /rec)
 SERVICES = {"monitor": "vhf-monitor", "homepods": "vhf-audio-bridge",
             "airplay": "shairport-sync"}
 
@@ -17,7 +18,9 @@ SERVICES = {"monitor": "vhf-monitor", "homepods": "vhf-audio-bridge",
 CONFIG_FILE = os.environ.get("VHF_CONFIG", "/etc/vhf/vhf.conf")
 
 def read_config():
-    cfg = {"shipname": "Wilhelmina", "homepods": "auto"}   # auto | on | off
+    # shipname: "auto" = aus Signal K holen; sonst woertlich (Override).
+    cfg = {"shipname": "auto", "homepods": "auto",         # auto | on | off
+           "signalk": "http://localhost:3000"}
     try:
         for ln in open(CONFIG_FILE):
             ln = ln.strip()
@@ -30,6 +33,37 @@ def read_config():
     except Exception:
         pass
     return cfg
+
+_sk_cache = {"t": 0.0, "name": None}
+
+def signalk_name(base):
+    # Schiffsname aus Signal K (vessels.self.name); 30s gecacht, kurzer Timeout.
+    now = time.monotonic()
+    if now - _sk_cache["t"] < 30:
+        return _sk_cache["name"]
+    name = None
+    try:
+        url = base.rstrip("/") + "/signalk/v1/api/vessels/self/name"
+        with urllib.request.urlopen(url, timeout=1.5) as r:
+            d = json.load(r)
+        if isinstance(d, str):
+            name = d
+        elif isinstance(d, dict):
+            name = d.get("value") or d.get("name")
+        if name:
+            name = str(name).strip() or None
+    except Exception:
+        name = None
+    _sk_cache["t"] = now
+    _sk_cache["name"] = name
+    return name
+
+def resolve_shipname():
+    cfg = read_config()
+    nm = cfg["shipname"]
+    if nm.lower() != "auto":
+        return nm                                    # expliziter Override
+    return signalk_name(cfg["signalk"]) or "Wilhelmina"
 
 def pods_enabled(outs):
     # Sind HomePods "an Bord"? auto = anhand der OwnTone-Ausgaenge erkannt.
@@ -534,7 +568,7 @@ bmute.addEventListener('click',async()=>{muteTs=Date.now();bmute._set(!bmute._on
 $('breplay').addEventListener('click',()=>{$('reclist').classList.toggle('open');});
 
 function toggleRec(){const p=$('recpanel');const open=p.classList.toggle('on');
-  if(open){$('recframe').src=location.protocol+'//'+location.hostname+':8088/';
+  if(open){if(!$('recframe').src)$('recframe').src='/rec/';
     $('recbtn').textContent='♫ Aufnahmen ausblenden';
     setTimeout(()=>p.scrollIntoView({behavior:'smooth',block:'nearest'}),60);}
   else{$('recbtn').textContent='♫ Aufnahmen anzeigen';}}
@@ -653,10 +687,36 @@ class H(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(b)))
         self.end_headers()
         self.wfile.write(b)
+    def _proxy(self):
+        # Reverse-Proxy /rec/... -> interne Nachhoer-Liste (vhf-web) auf WEB_PORT,
+        # damit alles ueber Port 8090 erreichbar ist (kein zweiter offener Port noetig).
+        sub = self.path[4:]                       # alles nach "/rec"
+        if not sub.startswith("/"):
+            sub = "/" + sub
+        target = "http://127.0.0.1:%d%s" % (WEB_PORT, sub)
+        data = None
+        if self.command == "POST":
+            n = int(self.headers.get("Content-Length", 0) or 0)
+            data = self.rfile.read(n) if n else b""
+        req = urllib.request.Request(target, data=data, method=self.command)
+        ct = self.headers.get("Content-Type")
+        if ct:
+            req.add_header("Content-Type", ct)
+        try:
+            with urllib.request.urlopen(req, timeout=10) as r:
+                self._send(r.status, r.read(),
+                           r.headers.get("Content-Type", "application/octet-stream"))
+        except urllib.error.HTTPError as e:
+            self._send(e.code, e.read() or b"",
+                       e.headers.get("Content-Type", "text/plain"))
+        except Exception:
+            self._send(502, "Nachhoer-Liste (vhf-web) nicht erreichbar", "text/plain")
     def do_GET(self):
         if self.path == "/" or self.path.startswith("/index"):
-            page = PAGE.replace("__SHIP__", html.escape(read_config()["shipname"]))
+            page = PAGE.replace("__SHIP__", html.escape(resolve_shipname()))
             self._send(200, page, "text/html; charset=utf-8")
+        elif self.path == "/rec" or self.path.startswith("/rec/"):
+            self._proxy()
         elif self.path.startswith("/api/state"):
             self._send(200, json.dumps(state()))
         elif self.path.startswith("/api/level"):   # leichtgewichtig, schnelles VU-Polling
@@ -668,6 +728,8 @@ class H(BaseHTTPRequestHandler):
             self._send(404, "{}")
     def do_POST(self):
         u = urllib.parse.urlparse(self.path)
+        if u.path == "/rec" or u.path.startswith("/rec/"):
+            self._proxy(); return
         q = urllib.parse.parse_qs(u.query)
         if u.path == "/api/set":
             out = {}

@@ -2,25 +2,57 @@
 # VHF-Aufnahmen: Web-Liste. Abspielen, Download, und Markieren (ausgrauen) ohne
 # Nachfrage; beim Verlassen der Seite werden die markierten geloescht.
 # Laeuft OHNE root (in Gruppe audio); Loeschen via Verzeichnisrechte.
-import os, html, json, urllib.parse, urllib.request
+import os, html, json, time, urllib.parse, urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 DIR = os.environ.get("VHF_DIR", "/srv/music/VHF-Aufnahmen")
 PORT = int(os.environ.get("VHF_WEB_PORT", "8088"))
 CONFIG_FILE = os.environ.get("VHF_CONFIG", "/etc/vhf/vhf.conf")
 
-def shipname():
-    # Schiffsname aus /etc/vhf/vhf.conf (key=value); Default falls nicht gesetzt.
+def read_config():
+    # shipname: "auto" = aus Signal K holen; sonst woertlich (Override).
+    cfg = {"shipname": "auto", "signalk": "http://localhost:3000"}
     try:
         for ln in open(CONFIG_FILE):
             ln = ln.strip()
-            if ln.startswith("shipname") and "=" in ln:
-                v = ln.partition("=")[2].strip()
-                if v:
-                    return v
+            if not ln or ln.startswith("#") or "=" not in ln:
+                continue
+            k, _, v = ln.partition("=")
+            k = k.strip().lower(); v = v.strip()
+            if k in cfg and v:
+                cfg[k] = v
     except Exception:
         pass
-    return "Wilhelmina"
+    return cfg
+
+_sk_cache = {"t": 0.0, "name": None}
+
+def signalk_name(base):
+    now = time.monotonic()
+    if now - _sk_cache["t"] < 30:
+        return _sk_cache["name"]
+    name = None
+    try:
+        url = base.rstrip("/") + "/signalk/v1/api/vessels/self/name"
+        with urllib.request.urlopen(url, timeout=1.5) as r:
+            d = json.load(r)
+        if isinstance(d, str):
+            name = d
+        elif isinstance(d, dict):
+            name = d.get("value") or d.get("name")
+        name = (str(name).strip() or None) if name else None
+    except Exception:
+        name = None
+    _sk_cache["t"] = now
+    _sk_cache["name"] = name
+    return name
+
+def shipname():
+    cfg = read_config()
+    nm = cfg["shipname"]
+    if nm.lower() != "auto":
+        return nm                                    # expliziter Override
+    return signalk_name(cfg["signalk"]) or "Wilhelmina"
 
 LABELS_FILE = os.path.join(DIR, ".labels.txt")
 LABEL_GROUPS = [
@@ -75,7 +107,7 @@ def label_page():
             "<p style=color:#9aa3bd>Jede anh&ouml;ren, dann <b>St&ouml;rung</b> oder <b>echt</b> tippen.</p>"
             + "".join(secs) +
             "<script>async function setl(b,l){var li=b.closest('li');"
-            "await fetch('/setlabel?f='+encodeURIComponent(li.dataset.f)+'&l='+l,{method:'POST'});"
+            "await fetch('setlabel?f='+encodeURIComponent(li.dataset.f)+'&l='+l,{method:'POST'});"
             "li.querySelectorAll('.lb button').forEach(function(x){x.classList.remove('on');});"
             "b.classList.add('on');"
             "li.querySelector('.cur').textContent='\\u2192 '+l;}"
@@ -226,11 +258,11 @@ def page():
             "if(a){a.pause();try{a.currentTime=0;}catch(e){}}}}"
             "function commit(){var m=[].slice.call(document.querySelectorAll('li.marked'))"
             ".map(function(li){return li.dataset.f;});"
-            "if(m.length){try{navigator.sendBeacon('/commit',JSON.stringify(m));}catch(e){}}}"
+            "if(m.length){try{navigator.sendBeacon('commit',JSON.stringify(m));}catch(e){}}}"
             "window.addEventListener('pagehide',commit);"
             "window.addEventListener('beforeunload',commit);"
             "async function restore(btn){var li=btn.closest('li');"
-            "var r=await fetch('/restore?f='+encodeURIComponent(li.dataset.f),{method:'POST'});"
+            "var r=await fetch('restore?f='+encodeURIComponent(li.dataset.f),{method:'POST'});"
             "if(r.ok){li.remove();}else{alert('Wiederherstellen fehlgeschlagen');}}"
             "</script></body></html>")
 

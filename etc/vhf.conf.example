@@ -3,7 +3,12 @@
 # Format: key = value ; Zeilen mit # sind Kommentare.
 
 # Schiffsname in den Titelzeilen von Nachhör-Liste (:8088) und Panel (:8090).
-shipname = Wilhelmina
+#   auto        = aus Signal K holen (vessels.self.name), sonst Fallback "Wilhelmina"
+#   <Name>      = fester Name (überschreibt Signal K)
+shipname = auto
+
+# Signal-K-Server für den Schiffsnamen (nur bei shipname = auto).
+signalk = http://localhost:3000
 
 # HomePod-/AirPlay-Übernahme im Panel (:8090) — nur relevant mit Control-Panel-Add-on:
 #   auto = zeigen, wenn HomePods (ShiPod-Ausgänge) in OwnTone erkannt werden

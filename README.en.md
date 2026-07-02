@@ -103,8 +103,8 @@ addons/   homepods/       – optional AirPlay-2 output (separate setup)
           control-panel/  – optional touch control panel (:8090)
 ```
 
-The ship name shown in the title bars is configurable via
-[`etc/vhf.conf.example`](etc/vhf.conf.example) (`/etc/vhf/vhf.conf`, no restart needed).
+The ship name shown in the title bars comes from **Signal K** (`vessels.self.name`) or
+from [`etc/vhf.conf.example`](etc/vhf.conf.example) (`/etc/vhf/vhf.conf`, no restart needed).
 
 ## Docs
 

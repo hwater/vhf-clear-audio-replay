@@ -3,9 +3,9 @@
 *🇩🇪 Deutsch*
 
 > **Optional.** Ein maritimes Touch-Bedienpanel für Handy/Tablet, das die
-> VHF-Funktionen an einem Ort bündelt: Funk-Pegelanzeige, Messe-Live-Monitor,
-> Aufnahmen-Liste (bindet die Nachhör-Liste :8088 als iframe ein) und – falls
-> HomePods an Bord sind – die HomePod-Übernahme.
+> VHF-Funktionen an **einem Port (8090)** bündelt: Funk-Pegelanzeige,
+> Messe-Live-Monitor, die Nachhör-Liste (eingebettet über einen Proxy, siehe
+> „Ein Port" unten) und – falls HomePods an Bord sind – die HomePod-Übernahme.
 >
 > **Ohne HomePods** zeigt und steuert das Panel automatisch **nur den
 > Messe-Lautsprecher** (siehe `homepods`-Einstellung unten).
@@ -30,10 +30,14 @@ Das Panel (und die Nachhör-Liste :8088) lesen `/etc/vhf/vhf.conf`
 (siehe [`etc/vhf.conf.example`](../etc/vhf.conf.example)) — **ohne Neustart**:
 
 ```ini
-shipname = Wilhelmina      # Titelzeile beider Oberflächen
-homepods = auto            # auto | on | off
+shipname = auto                    # auto = aus Signal K; oder fester Name
+signalk  = http://localhost:3000   # Signal-K-Server (nur bei shipname = auto)
+homepods = auto                    # auto | on | off
 ```
 
+- `shipname = auto` — der Schiffsname wird aus **Signal K** geholt
+  (`vessels.self.name`, 30 s gecacht); ist Signal K nicht erreichbar, gilt der
+  Fallback „Wilhelmina". Ein fester Wert (`shipname = Möwe`) überschreibt Signal K.
 - `homepods = auto` — HomePod-Übernahme erscheint, sobald ShiPod-Ausgänge in
   OwnTone erkannt werden (Standard).
 - `homepods = on` — immer anzeigen.
@@ -46,13 +50,28 @@ sudo cp etc/vhf.conf.example /etc/vhf/vhf.conf
 sudo nano /etc/vhf/vhf.conf        # shipname/homepods anpassen
 ```
 
+## Ein Port (8090)
+
+Damit man nicht zwei Ports braucht, ist die Nachhör-Liste **durch das Panel
+erreichbar**: `vhf-control` proxyt alles unter `http://<pi>:8090/rec/` an den
+intern weiterlaufenden `vhf-web` (Standard-Port 8088, `VHF_WEB_PORT`). Die
+eingebettete Aufnahmen-Ansicht im Panel zeigt auf `/rec/` — nach außen genügt
+**Port 8090**.
+
+- `vhf-web` läuft weiter (Nachhör-Kern), wird aber nur noch intern gebraucht;
+  Port 8088 kann per Firewall geschlossen oder auf `127.0.0.1` gebunden werden.
+- Alle Aktionen der Liste (Abspielen, Download, Ausblenden, Zurückholen) laufen
+  über den Proxy — die Client-Pfade sind relativ, damit das sowohl direkt (8088)
+  als auch eingebettet (8090/rec) funktioniert.
+
 ## Was das Panel nutzt
 
 | Funktion | Abhängigkeit |
 |---|---|
 | Funk-Pegel (VU) | `vhf-level` schreibt `/run/vhf/level` |
 | Messe-Live-Monitor (An/Aus + Lautstärke) | `vhf-monitor` + ALSA-Mixer `Speaker` (Karte 3) |
-| Aufnahmen-Liste | Nachhör-Kern `vhf-web` (:8088, als iframe) |
+| Aufnahmen-Liste | Nachhör-Kern `vhf-web` (intern :8088), eingebettet über Proxy `/rec/` |
+| Schiffsname | Signal K (`vessels.self.name`), sonst `/etc/vhf/vhf.conf` |
 | HomePod-Übernahme / „Funk wiederholen" | **HomePod-Add-on** (OwnTone, `vhf-playout.sh`, `vhf-shipods`) — siehe [addons-homepods.md](addons-homepods.md) |
 
 Ohne das HomePod-Add-on bleibt das Panel voll nutzbar (Messe-Betrieb); die
