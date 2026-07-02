@@ -1,39 +1,41 @@
-# Add-on: HomePod- / AirPlay-2-Ausgabe
+# Add-on: HomePod / AirPlay-2 output
 
-> **Optional.** Der Nachhör-Kern (Aufnahme + Web-Replay) läuft ohne dieses Add-on.
-> Hier kommt hinzu: erkannter *echter* Funk wird nach einer einstellbaren Verzögerung
-> kurz auf AirPlay-2-Lautsprecher (z. B. HomePods) „übernommen" und danach wieder
-> freigegeben – so bleiben die Lautsprecher sonst für iPhone-Musik frei.
+*[🇩🇪 Deutsch](addons-homepods.de.md) · 🇬🇧 English*
 
-Dateien: [`addons/homepods/`](../addons/homepods/)
+> **Optional.** The replay core (recording + web replay) works without this add-on.
+> What it adds: detected *real* traffic is briefly "taken over" onto AirPlay-2 speakers
+> (e.g. HomePods) after an adjustable delay and released again afterwards — so the
+> speakers otherwise stay free for iPhone music.
+
+Files: [`addons/homepods/`](../addons/homepods/)
 
 ```
 addons/homepods/
 ├── bin/
-│   ├── vhf-playout.sh    echten Funk-Clip kurz auf die AirPlay-Ausgänge spielen
-│   ├── vhf-shipods.sh    Ausgänge ausgewählt halten + Zustand melden
-│   └── vhf-podwatch.sh   Netz-Erreichbarkeit überwachen, OwnTone selbstheilen
+│   ├── vhf-playout.sh    play a real traffic clip briefly on the AirPlay outputs
+│   ├── vhf-shipods.sh    keep the outputs selected + report state
+│   └── vhf-podwatch.sh   monitor network reachability, self-heal OwnTone
 └── systemd/
     ├── vhf-shipods.service / .timer
     └── vhf-podwatch.service
 ```
 
-## Voraussetzung: OwnTone
+## Prerequisite: OwnTone
 
-Die Ausgabe läuft über **[OwnTone](https://owntone.github.io/owntone-server/)** (Fork
-von forked-daapd) als AirPlay-2-Sender.
+Output goes through **[OwnTone](https://owntone.github.io/owntone-server/)** (a fork of
+forked-daapd) as an AirPlay-2 sender.
 
 ```bash
-# OwnTone aus dem offiziellen APT-Repo installieren (siehe OwnTone-Doku)
+# Install OwnTone from the official APT repo (see OwnTone docs)
 sudo apt install owntone
 ```
 
-In `/etc/owntone.conf` mindestens einen ALSA/Pipe-Betrieb konfigurieren und die
-AirPlay-Ausgänge im Webinterface (`http://<pi>:3689`) einmalig **auswählen**.
+In `/etc/owntone.conf` configure at least one ALSA/pipe output, and **select** the
+AirPlay outputs once in the web interface (`http://<pi>:3689`).
 
-## Geräte-IDs anpassen (Pflicht!)
+## Adjust device IDs (required!)
 
-Die Skripte enthalten **feste OwnTone-Ausgangs-IDs** der HomePods dieses Setups:
+The scripts contain **fixed OwnTone output IDs** of the HomePods in this setup:
 
 ```bash
 # vhf-playout.sh
@@ -41,27 +43,26 @@ BB=279973827291484     # ShiPod BB
 SB=178870811768074     # ShiPod SB
 ```
 
-Deine IDs findest du mit:
+Find your IDs with:
 
 ```bash
 curl -s http://localhost:3689/api/outputs | python3 -m json.tool
 ```
 
-`BB`/`SB` in `vhf-playout.sh` **und** die Listen in `vhf-shipods.sh` / `vhf-podwatch.sh`
-(`NAME`-Map, `ShiPod-*.local`-Hostnamen) auf deine Geräte umschreiben.
+Rewrite `BB`/`SB` in `vhf-playout.sh` **and** the lists in `vhf-shipods.sh` /
+`vhf-podwatch.sh` (`NAME` map, `ShiPod-*.local` hostnames) to your devices.
 
-## Funktionsweise
+## How it works
 
-- **`vhf-playout.sh <mp3> [now]`** – wählt die AirPlay-Ausgänge, setzt die Lautstärke
-  (`/var/lib/vhf/hpvol`), spielt genau einen Clip über OwnTone und gibt die Ausgänge
-  danach wieder frei. Ohne `now`: wartet die Verzögerung aus `/var/lib/vhf/delay`
-  (Default 7 s) ab und respektiert das Mute-Flag `/run/vhf/mute`.
-- **`vhf-shipods.*`** – ein Timer hält die AirPlay-2-Ausgänge *ausgewählt* (AirPlay-2
-  verliert die Auswahl bei OwnTone-Neustart) und meldet den Zustand nach
-  `/run/vhf/shipods.state`.
-- **`vhf-podwatch.*`** – prüft die WLAN-Erreichbarkeit der Pods (mDNS + AirPlay-Port
-  7000) und startet OwnTone *einmalig* neu (Cooldown 5 min), wenn beide wieder im Netz
-  sind, OwnTone sie aber verloren hat.
+- **`vhf-playout.sh <mp3> [now]`** – selects the AirPlay outputs, sets the volume
+  (`/var/lib/vhf/hpvol`), plays exactly one clip through OwnTone and releases the outputs
+  afterwards. Without `now`: waits the delay from `/var/lib/vhf/delay` (default 7 s) and
+  honors the mute flag `/run/vhf/mute`.
+- **`vhf-shipods.*`** – a timer keeps the AirPlay-2 outputs *selected* (AirPlay-2 loses
+  the selection on an OwnTone restart) and reports state to `/run/vhf/shipods.state`.
+- **`vhf-podwatch.*`** – checks Wi-Fi reachability of the pods (mDNS + AirPlay port 7000)
+  and restarts OwnTone *once* (5-min cooldown) when both are back on the network but
+  OwnTone has lost them.
 
 ## Installation
 
@@ -69,26 +70,26 @@ curl -s http://localhost:3689/api/outputs | python3 -m json.tool
 sudo install -m755 addons/homepods/bin/*.sh /usr/local/bin/
 sudo install -m644 addons/homepods/systemd/* /etc/systemd/system/
 sudo mkdir -p /var/lib/vhf
-echo 7  | sudo tee /var/lib/vhf/delay     # Verzögerung Sekunden
-echo 60 | sudo tee /var/lib/vhf/hpvol     # HomePod-Lautstärke 0..100
+echo 7  | sudo tee /var/lib/vhf/delay     # delay in seconds
+echo 60 | sudo tee /var/lib/vhf/hpvol     # HomePod volume 0..100
 sudo systemctl daemon-reload
 sudo systemctl enable --now vhf-shipods.timer vhf-podwatch
 ```
 
-Sobald `vhf-playout.sh` als `/usr/local/bin/vhf-playout.sh` **ausführbar** vorhanden
-ist, ruft der `vhf-recorder` es bei erkannter Sprache automatisch auf – keine Änderung
-am Recorder nötig.
+As soon as `vhf-playout.sh` is present and **executable** at
+`/usr/local/bin/vhf-playout.sh`, the `vhf-recorder` calls it automatically on detected
+speech — no change to the recorder needed.
 
-## Deaktivieren
+## Disable
 
 ```bash
 sudo systemctl disable --now vhf-shipods.timer vhf-podwatch
-sudo rm /usr/local/bin/vhf-playout.sh    # Recorder überspringt die Übernahme dann wieder
+sudo rm /usr/local/bin/vhf-playout.sh    # the recorder then skips the takeover again
 ```
 
-## Hinweis / Umfang
+## Note / scope
 
-Dieses Add-on deckt die **Nachhör-Übernahme** (einzelner Clip → HomePods) ab. Das
-größere Live-/AirPlay-/Ducking-System (Live-Monitor, `vhf-mixer`, `shairport-sync`,
-Messe-Lautsprecher) aus dem ursprünglichen `wilhelmina-audio`-Setup ist hier bewusst
-**nicht** enthalten – es kann später als weiteres Add-on ergänzt werden.
+This add-on covers the **replay takeover** (single clip → HomePods). The larger
+live / AirPlay / ducking system (live monitor, `vhf-mixer`, `shairport-sync`, wired
+speaker) from the original `wilhelmina-audio` setup is deliberately **not** included
+here — it can be added later as another add-on.

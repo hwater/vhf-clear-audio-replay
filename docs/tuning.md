@@ -1,63 +1,64 @@
 # Tuning – VHF clear Audio replay
 
-Alle Stellschrauben stehen als Konstanten oben in den Skripten. Nach Änderungen an
-`/usr/local/bin/*` den jeweiligen Dienst neu starten
-(`sudo systemctl restart vhf-recorder`).
+*[🇩🇪 Deutsch](tuning.de.md) · 🇬🇧 English*
 
-## VOX / Rauschsperre (`bin/vhf-recorder.sh`)
+All knobs are constants near the top of the scripts. After editing `/usr/local/bin/*`,
+restart the relevant service (`sudo systemctl restart vhf-recorder`).
 
-| Variable | Default | Wirkung |
+## VOX / squelch (`bin/vhf-recorder.sh`)
+
+| Variable | Default | Effect |
 |---|---|---|
-| `THRESH` | `3%` | VOX-Schwelle. Höher = nur lauterer Funk löst aus (weniger Fehlstarts, aber leise Sprüche gehen verloren). |
-| `TRAIL` | `1.5` | Sekunden Stille, bis ein Spruch als beendet gilt. Höher = Sprechpausen brechen die Aufnahme nicht auf. |
-| `MINDUR` | `1.0` | Kürzere Schnipsel (Störblips) werden verworfen. |
-| `MAXDUR` | `90` | Sicherheits-Limit; längeres Signal = offener Squelch/Dauerstörung → verworfen. Auch per Env `VHF_MAXDUR`. |
+| `THRESH` | `3%` | VOX threshold. Higher = only louder traffic triggers (fewer false starts, but quiet transmissions are lost). |
+| `TRAIL` | `1.5` | Seconds of silence until a transmission counts as finished. Higher = speech pauses don't split the recording. |
+| `MINDUR` | `1.0` | Shorter clips (noise blips) are discarded. |
+| `MAXDUR` | `90` | Safety limit; a longer signal = open squelch / continuous interference → discarded. Also via env `VHF_MAXDUR`. |
 
-**Symptom → Stellschraube**
-- *Nimmt Rauschen auf:* `THRESH` erhöhen (z. B. `4%`), Squelch am Funkgerät zudrehen.
-- *Verpasst leise Sprüche:* `THRESH` senken (z. B. `2%`).
-- *Zerhackt lange Sprüche in Teile:* `TRAIL` erhöhen.
+**Symptom → knob**
+- *Records noise:* raise `THRESH` (e.g. `4%`), close the squelch on the radio.
+- *Misses quiet transmissions:* lower `THRESH` (e.g. `2%`).
+- *Chops long transmissions into parts:* raise `TRAIL`.
 
-## Klang / „clear audio" (ffmpeg-Zeile im Recorder)
+## Sound / "clear audio" (ffmpeg line in the recorder)
 
 ```
 -af "afftdn=nf=-25,loudnorm=I=-16:TP=-1.5:LRA=11"
 ```
 
-- `afftdn=nf=-25` – FFT-Rauschunterdrückung; aggressiver = `-20`, sanfter = `-30`.
-- `loudnorm I=-16` – Ziel-Lautheit; lauter = `-14`, leiser = `-18`.
-- Bandbreite kommt aus `sox … highpass 250 lowpass 3400` (Sprachband). MP3 96 kbit/s
-  reicht für Funksprache; `-b:a` bei Bedarf hochsetzen.
+- `afftdn=nf=-25` – FFT noise reduction; more aggressive = `-20`, gentler = `-30`.
+- `loudnorm I=-16` – target loudness; louder = `-14`, quieter = `-18`.
+- Bandwidth comes from `sox … highpass 250 lowpass 3400` (speech band). MP3 96 kbit/s is
+  enough for radio speech; raise `-b:a` if desired.
 
-## Störungs-Klassifikator (`bin/vhf-classify.py`, Env im Recorder)
+## Interference classifier (`bin/vhf-classify.py`, env set in the recorder)
 
-Der Recorder exportiert die Schwellen; Regel: **Sprache**, wenn
-`MI_LO ≤ modIndex ≤ MI_HI` **und** `mod4 ≥ MOD4`.
+The recorder exports the thresholds; rule: **speech** if
+`MI_LO ≤ modIndex ≤ MI_HI` **and** `mod4 ≥ MOD4`.
 
-| Env | Default | Wirkung |
+| Env | Default | Effect |
 |---|---|---|
-| `VHF_MI_LO` | `0.55` | untere Modulations-Grenze (darunter = Dauerträger) |
-| `VHF_MI_HI` | `1.65` | obere Grenze (darüber = erratisches Rauschen) |
-| `VHF_MOD4` | `0.30` | Mindestanteil im 2–8 Hz Silbentakt |
+| `VHF_MI_LO` | `0.55` | lower modulation bound (below = continuous carrier) |
+| `VHF_MI_HI` | `1.65` | upper bound (above = erratic noise) |
+| `VHF_MOD4` | `0.30` | minimum share in the 2–8 Hz syllable rate |
 
-- **Enger stellen** (`MI_LO` hoch, `MI_HI` runter, `MOD4` hoch) = fängt mehr Störungen,
-  Risiko echten Funk zu verlieren.
-- **Weiter stellen** = sicherer, lässt mehr durch. Im Zweifel behält der Klassifikator.
-- Kalibrieren: `tail -f /run/vhf/classify.log` – zeigt `modIdx`/`mod4` je Aufnahme mit
-  KEEP/NOISE. Werte falsch einsortierter Clips ablesen und Grenzen nachziehen.
-- Im Web unter „Aussortiert / ausgeblendet" lässt sich jede Fehlentscheidung anhören
-  und mit **„echt"** zurückholen.
+- **Tighter** (`MI_LO` up, `MI_HI` down, `MOD4` up) = catches more noise, at the risk of
+  losing real traffic.
+- **Wider** = safer, lets more through. When in doubt the classifier keeps.
+- Calibrate: `tail -f /run/vhf/classify.log` – shows `modIdx`/`mod4` per recording with
+  KEEP/NOISE. Read off the values of misclassified clips and adjust the bounds.
+- In the web UI under "Aussortiert / ausgeblendet" you can listen to any wrong decision
+  and restore it with **"echt"** (real).
 
 ## Retention (`systemd/vhf-cleanup.service`)
 
 ```
-find … -name ".noise-*"   -mtime +1 -delete     # Störungen > 1 Tag
-find … -name "VHF_*.mp3"  -mtime +7 -delete     # Aufnahmen > 7 Tage
+find … -name ".noise-*"   -mtime +1 -delete     # noise > 1 day
+find … -name "VHF_*.mp3"  -mtime +7 -delete     # recordings > 7 days
 ```
 
-`+1` / `+7` anpassen für kürzere/längere Aufbewahrung. Timer läuft `OnCalendar=daily`.
+Adjust `+1` / `+7` for shorter/longer retention. The timer runs `OnCalendar=daily`.
 
-## Speicherbedarf (Faustregel)
+## Storage footprint (rule of thumb)
 
-MP3 mono 96 kbit/s ≈ **12 kB/s** → ~43 MB pro Stunde reiner Sprache. Da nur Sprüche
-aufgenommen werden, ist der reale Verbrauch weit geringer.
+MP3 mono 96 kbit/s ≈ **12 kB/s** → ~43 MB per hour of pure speech. Since only
+transmissions are recorded, real usage is far lower.

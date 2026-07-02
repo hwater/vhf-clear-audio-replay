@@ -1,90 +1,92 @@
-# Architektur – VHF clear Audio replay
+# Architecture – VHF clear Audio replay
 
-## Signalkette
+*[🇩🇪 Deutsch](architecture.de.md) · 🇬🇧 English*
+
+## Signal chain
 
 ```
-Funkgerät ──► USB-Adapter (hw:3,0, mono) ──► ALSA dsnoop "vhf" ──► sox VOX ──► ffmpeg ──► MP3
-                                                                     │            (Denoise/Loudnorm)
-                                                                     ▼
-                                                               vhf-classify.py
-                                                              (Sprache / Störung)
-                                                                     ▼
-                                                        /srv/music/VHF-Aufnahmen/
-                                                                     ▼
-                                                     vhf-web.py  (Browser, :8088)
+Radio ──► USB adapter (hw:3,0, mono) ──► ALSA dsnoop "vhf" ──► sox VOX ──► ffmpeg ──► MP3
+                                                                 │            (denoise/loudnorm)
+                                                                 ▼
+                                                           vhf-classify.py
+                                                          (speech / noise)
+                                                                 ▼
+                                                    /srv/music/VHF-Aufnahmen/
+                                                                 ▼
+                                                 vhf-web.py  (browser, :8088)
 ```
 
-## 1. Audio-Capture (ALSA)
+## 1. Audio capture (ALSA)
 
-Der USB-Adapter wird per **udev-Regel** fest benannt und per **modprobe-Index** fest auf
-Karte 3 gelegt, damit sich der Gerätename nach Reboots/USB-Reihenfolge nicht verschiebt:
+The USB adapter is given a fixed name via a **udev rule** and pinned to card 3 via a
+**modprobe index**, so the device name does not shift after reboots / USB re-ordering:
 
-- [`etc/85-vhf-audio.rules`](../etc/85-vhf-audio.rules): C-Media `0d8c:0014` → ALSA-ID `VHF`
+- [`etc/85-vhf-audio.rules`](../etc/85-vhf-audio.rules): C-Media `0d8c:0014` → ALSA id `VHF`
 - [`etc/alsa-vhf-index.conf`](../etc/alsa-vhf-index.conf): `snd-usb-audio index=3` → `hw:3`
 
-In [`etc/asound.conf`](../etc/asound.conf) definiert **`pcm.vhfsnoop` (type dsnoop)** eine
-*teilbare* Aufnahmequelle: mehrere Prozesse können denselben mono-Capture gleichzeitig
-lesen, ohne sich „das Gerät ist belegt" zu blockieren. `pcm.vhf` legt einen `plug`
-darüber (Format-/Rate-Konvertierung). Der Recorder liest schlicht das ALSA-Device `vhf`.
+In [`etc/asound.conf`](../etc/asound.conf), **`pcm.vhfsnoop` (type dsnoop)** defines a
+*shareable* capture source: several processes can read the same mono capture
+simultaneously without blocking each other with "device busy". `pcm.vhf` puts a `plug`
+on top (format/rate conversion). The recorder simply reads the ALSA device `vhf`.
 
-> Die `vhfout`/`vhfoutplug`-Blöcke (dmix-Playback) in `asound.conf` werden nur vom
-> **HomePod-Add-on** (lokale Messe-Ausgabe/OwnTone) gebraucht; für den reinen Nachhör-
-> Kern sind sie ungenutzt, stören aber nicht.
+> The `vhfout`/`vhfoutplug` (dmix playback) blocks in `asound.conf` are only needed by
+> the **HomePod add-on** (local wired output / OwnTone); for the pure replay core they
+> are unused but harmless.
 
-## 2. Aufnahme (`bin/vhf-recorder.sh`)
+## 2. Recording (`bin/vhf-recorder.sh`)
 
-Eine Endlosschleife nimmt **einen Funkspruch pro Durchlauf** auf:
+An endless loop records **one transmission per pass**:
 
 1. `sox -t alsa vhf ... silence 1 0.1 THRESH 1 TRAIL THRESH trim 0 MAXDUR`
-   – blockiert, bis Ton über der **VOX-Schwelle** (`THRESH`, Default `3%`) anliegt,
-   nimmt auf und stoppt nach `TRAIL` (1.5 s) Stille. `highpass 250 lowpass 3400`
-   beschneidet auf das Sprachband.
-2. **Plausibilität:** kürzer als `MINDUR` (1 s) = Störblip → verwerfen; länger als
-   `MAXDUR` (90 s) = offener Squelch/Dauerstörung → verwerfen.
-3. **Nachbearbeitung** mit ffmpeg: `afftdn` (FFT-Denoise) + `loudnorm`
-   (I=-16, TP=-1.5) → gleichmäßig laute, entrauschte Mono-MP3 (96 kbit/s) unter
-   `/srv/music/VHF-Aufnahmen/VHF_<zeit>.mp3`.
-4. **Klassifikation** im Hintergrund (siehe unten). Störungen werden nach
-   `.noise-VHF_<zeit>.mp3` umbenannt (versteckt, rückholbar).
+   – blocks until audio above the **VOX threshold** (`THRESH`, default `3%`) is present,
+   records, and stops after `TRAIL` (1.5 s) of silence. `highpass 250 lowpass 3400`
+   restricts to the speech band.
+2. **Plausibility:** shorter than `MINDUR` (1 s) = noise blip → discard; longer than
+   `MAXDUR` (90 s) = open squelch / continuous interference → discard.
+3. **Post-processing** with ffmpeg: `afftdn` (FFT denoise) + `loudnorm`
+   (I=-16, TP=-1.5) → evenly loud, denoised mono MP3 (96 kbit/s) at
+   `/srv/music/VHF-Aufnahmen/VHF_<time>.mp3`.
+4. **Classification** in the background (see below). Noise is renamed to
+   `.noise-VHF_<time>.mp3` (hidden, recoverable).
 
-Die OwnTone-/HomePod-Aufrufe im Recorder sind **bedingt** (`[ -x vhf-playout.sh ]`):
-ohne das HomePod-Add-on werden sie übersprungen – der Nachhör-Kern ist eigenständig.
+The OwnTone/HomePod calls in the recorder are **conditional** (`[ -x vhf-playout.sh ]`):
+without the HomePod add-on they are skipped — the replay core is standalone.
 
-## 3. Störungs-Klassifikator (`bin/vhf-classify.py`)
+## 3. Interference classifier (`bin/vhf-classify.py`)
 
-Trennt echte Sprache von Trägern/Rauschen **gain-unabhängig** über den *Rhythmus* der
-Lautstärke-Hüllkurve statt über absolute Pegel:
+Separates real speech from carriers/noise **gain-independently** via the *rhythm* of the
+loudness envelope rather than absolute levels:
 
-- `modIndex = std/mean` der Energie-Hüllkurve (Sprachband, Hüllkurve @100 Hz)
-- `mod4` = Anteil der Hüllkurven-Energie im **2–8 Hz Silbentakt**
+- `modIndex = std/mean` of the energy envelope (speech band, envelope @100 Hz)
+- `mod4` = fraction of envelope energy in the **2–8 Hz syllable rate**
 
-**Sprache**, wenn `MI_LO ≤ modIndex ≤ MI_HI` **und** `mod4 ≥ MOD4`
-(Defaults 0.55 / 1.65 / 0.30). Dauerträger (modIndex zu niedrig) und erratisches
-Rauschen (modIndex zu hoch) fallen raus. **Im Zweifel wird behalten** (Decode-Fehler,
-sehr kurze Clips → KEEP). Entscheidungen landen in `/run/vhf/classify.log`.
+**Speech** if `MI_LO ≤ modIndex ≤ MI_HI` **and** `mod4 ≥ MOD4`
+(defaults 0.55 / 1.65 / 0.30). Continuous carriers (modIndex too low) and erratic noise
+(modIndex too high) fall out. **When in doubt it keeps** (decode error, very short clips
+→ KEEP). Decisions go to `/run/vhf/classify.log`.
 
-## 4. Web-Replay (`bin/vhf-web.py`)
+## 4. Web replay (`bin/vhf-web.py`)
 
-Ein stdlib-`ThreadingHTTPServer` auf **:8088**, kein Framework, kein root:
+A stdlib `ThreadingHTTPServer` on **:8088**, no framework, no root:
 
-- **Liste** neueste zuerst; jede Zeile mit `<audio controls>` (Streaming vom Server),
-  Dauer-Schätzung, Download-Link, Einzel-Ausblenden und Mehrfach-Auswahl.
-- **Ausblenden** verschiebt nach `.noise-*` (versteckt, nicht gelöscht); aussortierte
-  Störungen sind in einem ausklappbaren Bereich anzuhören und als „echt" zurückholbar.
-- Löschen/Verschieben läuft über **Verzeichnisrechte** (Ordner `group audio`,
-  group-writable) – der Dienst läuft als `DynamicUser` in Gruppe `audio`, nie als root.
-- Pfad-Sicherheit: nur Dateinamen `VHF_*.mp3` / `.noise-VHF_*.mp3`, kein `/` oder `\`.
+- **List** newest first; each row with `<audio controls>` (streamed from the server),
+  duration estimate, download link, single-hide and multi-select.
+- **Hiding** moves to `.noise-*` (hidden, not deleted); sorted-out noise is listenable in
+  an expandable section and can be restored as "real".
+- Deleting/moving goes through **directory permissions** (folder `group audio`,
+  group-writable) — the service runs as a `DynamicUser` in group `audio`, never as root.
+- Path safety: only file names `VHF_*.mp3` / `.noise-VHF_*.mp3`, no `/` or `\`.
 
-## 5. Aufräumung (`systemd/vhf-cleanup.*`)
+## 5. Cleanup (`systemd/vhf-cleanup.*`)
 
-`vhf-cleanup.timer` (täglich) löscht `.noise-*` älter als 1 Tag und `VHF_*.mp3` älter
-als 7 Tage. Die Retention lässt sich in der `.service` (find `-mtime`) anpassen.
+`vhf-cleanup.timer` (daily) deletes `.noise-*` older than 1 day and `VHF_*.mp3` older
+than 7 days. The retention can be adjusted in the `.service` (find `-mtime`).
 
-## Datenfluss der Dateizustände
+## File-state flow
 
 ```
-   Aufnahme ──► VHF_<zeit>.mp3 ──(classify: Störung)──► .noise-VHF_<zeit>.mp3
+   recording ──► VHF_<time>.mp3 ──(classify: noise)──► .noise-VHF_<time>.mp3
                      ▲                                          │
-                     └────────── „echt" zurückholen ◄───────────┘
-   Cleanup:  .noise-* > 1 Tag  und  VHF_* > 7 Tage  →  gelöscht
+                     └─────────── restore as "real" ◄───────────┘
+   cleanup:  .noise-* > 1 day  and  VHF_* > 7 days  →  deleted
 ```

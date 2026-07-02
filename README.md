@@ -9,7 +9,7 @@ Herunterladen und Aussortieren bereitstellt.
 
 > Kern dieses Projekts ist das **Nachhören** (Aufnahme + Replay). Die optionale
 > Ausgabe auf HomePods/AirPlay-Lautsprecher ist ein separates **Add-on**
-> ([`addons/homepods/`](addons/homepods/), siehe [docs/addons-homepods.md](docs/addons-homepods.md)).
+> ([`addons/homepods/`](addons/homepods/), siehe [docs/addons-homepods.de.md](docs/addons-homepods.de.md)).
 
 ## Was es kann
 
@@ -58,7 +58,7 @@ Herunterladen und Aussortieren bereitstellt.
 
 ## Schnellstart
 
-Siehe [docs/install.md](docs/install.md) für alle Schritte. Kurzform:
+Siehe [docs/install.de.md](docs/install.de.md) für alle Schritte. Kurzform:
 
 ```bash
 # 1) Pakete
@@ -104,10 +104,10 @@ addons/   homepods/  – optionale AirPlay-2-Ausgabe (separater Setup)
 
 ## Doku
 
-- [docs/architecture.md](docs/architecture.md) – Signalweg, ALSA, Klassifikator im Detail
-- [docs/install.md](docs/install.md) – vollständige Installation & Erst-Check
-- [docs/tuning.md](docs/tuning.md) – VOX-Schwellen, Denoise, Störungsfilter justieren
-- [docs/addons-homepods.md](docs/addons-homepods.md) – HomePod-/AirPlay-Ausgabe nachrüsten
+- [docs/architecture.de.md](docs/architecture.de.md) – Signalweg, ALSA, Klassifikator im Detail
+- [docs/install.de.md](docs/install.de.md) – vollständige Installation & Erst-Check
+- [docs/tuning.de.md](docs/tuning.de.md) – VOX-Schwellen, Denoise, Störungsfilter justieren
+- [docs/addons-homepods.de.md](docs/addons-homepods.de.md) – HomePod-/AirPlay-Ausgabe nachrüsten
 
 ## Lizenz
 

@@ -10,7 +10,6 @@ download and triage.
 > The core of this project is **replay** (record + listen back). Optional output to
 > HomePods / AirPlay speakers is a separate **add-on**
 > ([`addons/homepods/`](addons/homepods/), see [docs/addons-homepods.md](docs/addons-homepods.md)).
-> The docs under [`docs/`](docs/) are currently in German.
 
 ## Features
 
@@ -99,7 +98,7 @@ a few seconds the first recording appears.
 bin/      vhf-recorder.sh · vhf-classify.py · vhf-web.py
 etc/      asound.conf (ALSA capture) · udev rule · modprobe index
 systemd/  vhf-recorder · vhf-web · vhf-cleanup (.service/.timer)
-docs/     architecture · install · tuning · HomePod add-on (in German)
+docs/     architecture · install · tuning · HomePod add-on
 addons/   homepods/  – optional AirPlay-2 output (separate setup)
 ```
 
