@@ -54,83 +54,10 @@ def shipname():
         return nm                                    # expliziter Override
     return signalk_name(cfg["signalk"]) or "Wilhelmina"
 
-LABELS_FILE = os.path.join(DIR, ".labels.txt")
-LABEL_GROUPS = [
-    ("A  &ndash; Haupthaufen (niedriger Centroid, stabile Tonh&ouml;he)",
-     ["VHF_2026-06-27_04-43-30.mp3", "VHF_2026-06-27_05-10-17.mp3",
-      "VHF_2026-06-27_05-12-05.mp3", "VHF_2026-06-27_07-27-02.mp3"]),
-    ("B  &ndash; oberer Bereich (hoher Centroid, wandernde Tonh&ouml;he)",
-     ["VHF_2026-06-27_07-52-09.mp3", "VHF_2026-06-27_10-08-24.mp3",
-      "VHF_2026-06-27_12-00-24.mp3", "VHF_2026-06-27_12-13-42.mp3"]),
-]
-
-def read_labels():
-    d = {}
-    try:
-        for ln in open(LABELS_FILE):
-            parts = ln.split()
-            if len(parts) == 2:
-                d[parts[0]] = parts[1]
-    except Exception:
-        pass
-    return d
-
-def label_page():
-    lab = read_labels()
-    secs = []
-    for title, files in LABEL_GROUPS:
-        rows = []
-        for f in files:
-            base = f[4:-4]; dd, _, tt = base.partition("_"); tt = tt.replace("-", ":")
-            fe = html.escape(f); cur = lab.get(f, "")
-            rows.append(
-                "<li data-f=\"%s\"><div class=hd><span class=t>%s&nbsp;&nbsp;%s</span>"
-                "<span class=cur>%s</span></div>"
-                "<audio controls preload=none src=\"%s\"></audio>"
-                "<div class=lb><button class=st onclick=\"setl(this,'stoerung')\">St&ouml;rung</button>"
-                "<button class=ec onclick=\"setl(this,'echt')\">echt</button></div></li>"
-                % (fe, html.escape(dd), html.escape(tt),
-                   ("&rarr; " + cur) if cur else "", fe))
-        secs.append("<h3>%s</h3><ul>%s</ul>" % (title, "".join(rows)))
-    return ("<!doctype html><html lang=de><head><meta charset=utf-8>"
-            "<meta name=viewport content=\"width=device-width,initial-scale=1\">"
-            "<title>VHF beurteilen</title><style>"
-            "body{font-family:system-ui,sans-serif;max-width:760px;margin:0 auto;padding:1em;"
-            "background:#0b1020;color:#e6e9f0}h2,h3{margin:.4em 0}ul{padding:0}"
-            "li{list-style:none;background:#161c33;border-radius:10px;padding:.6em .8em;margin:.55em 0}"
-            ".hd{display:flex;gap:10px;align-items:center}.t{font-weight:600}"
-            ".cur{margin-left:auto;color:#ffce6b;font-size:.9em}audio{width:100%;margin:.45em 0}"
-            ".lb{display:flex;gap:10px}.lb button{flex:1;border:none;border-radius:8px;padding:.6em;font-size:15px}"
-            ".st{background:#5a1d1d;color:#ffd9d9}.ec{background:#163b2a;color:#d9ffe9}"
-            ".lb button.on{outline:3px solid #fff}</style></head><body>"
-            "<h2>&#9875; Aufnahmen beurteilen</h2>"
-            "<p style=color:#9aa3bd>Jede anh&ouml;ren, dann <b>St&ouml;rung</b> oder <b>echt</b> tippen.</p>"
-            + "".join(secs) +
-            "<script>async function setl(b,l){var li=b.closest('li');"
-            "await fetch('setlabel?f='+encodeURIComponent(li.dataset.f)+'&l='+l,{method:'POST'});"
-            "li.querySelectorAll('.lb button').forEach(function(x){x.classList.remove('on');});"
-            "b.classList.add('on');"
-            "li.querySelector('.cur').textContent='\\u2192 '+l;}"
-            "</script></body></html>")
-
-def recordings():
-    try:
-        fs = [f for f in os.listdir(DIR) if f.startswith("VHF_") and f.endswith(".mp3")]
-    except Exception:
-        fs = []
-    return sorted(fs, reverse=True)
-
 def safe(name):
     return ("/" not in name and "\\" not in name
             and name.startswith("VHF_") and name.endswith(".mp3")
             and os.path.isfile(os.path.join(DIR, name)))
-
-def noise_list():
-    try:
-        fs = [f for f in os.listdir(DIR) if f.startswith(".noise-VHF_") and f.endswith(".mp3")]
-    except Exception:
-        fs = []
-    return sorted(fs, reverse=True)
 
 def safe_noise(name):
     return ("/" not in name and "\\" not in name
@@ -330,12 +257,9 @@ class H(BaseHTTPRequestHandler):
     def do_GET(self):
         p = urllib.parse.urlparse(self.path)
         name = urllib.parse.unquote(p.path.lstrip("/"))
-        if p.path in ("/", "") or p.path == "/label":
-            if p.path == "/label":
-                b = label_page().encode()
-            else:
-                embed = "embed" in urllib.parse.parse_qs(p.query)
-                b = page(embed).encode()
+        if p.path in ("/", ""):
+            embed = "embed" in urllib.parse.parse_qs(p.query)
+            b = page(embed).encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
@@ -376,50 +300,6 @@ class H(BaseHTTPRequestHandler):
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(b)))
             self.end_headers(); self.wfile.write(b)
-        elif p.path == "/commit":
-            try:
-                n = int(self.headers.get("Content-Length", 0))
-                names = json.loads(self.rfile.read(n) or b"[]")
-            except Exception:
-                names = []
-            moved = 0
-            for name in names if isinstance(names, list) else []:
-                if isinstance(name, str) and safe(name):
-                    try:  # NICHT loeschen, nur verstecken (rueckholbar)
-                        os.rename(os.path.join(DIR, name),
-                                  os.path.join(DIR, ".noise-" + name)); moved += 1
-                    except Exception:
-                        pass
-            if moved:
-                owntone_update()
-            self.send_response(200); self.end_headers()
-        elif p.path == "/restore":
-            q = urllib.parse.parse_qs(p.query)
-            name = q.get("f", [""])[0]
-            if safe_noise(name):
-                try:
-                    os.rename(os.path.join(DIR, name),
-                              os.path.join(DIR, name[len(".noise-"):]))  # .noise-VHF_.. -> VHF_..
-                    owntone_update()
-                    self.send_response(200)
-                except Exception:
-                    self.send_response(500)
-            else:
-                self.send_response(400)
-            self.end_headers()
-        elif p.path == "/setlabel":
-            q = urllib.parse.parse_qs(p.query)
-            f = q.get("f", [""])[0]; l = q.get("l", [""])[0]
-            if (safe(f) or safe_noise(f)) and l in ("stoerung", "echt"):
-                try:
-                    with open(LABELS_FILE, "a") as fh:
-                        fh.write("%s %s\n" % (f, l))
-                    self.send_response(200)
-                except Exception:
-                    self.send_response(500)
-            else:
-                self.send_response(400)
-            self.end_headers()
         else:
             self.send_response(404); self.end_headers()
 

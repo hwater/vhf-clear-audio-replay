@@ -68,7 +68,7 @@ eingebettete Aufnahmen-Ansicht im Panel zeigt auf `/rec/` — nach außen genüg
 ## Zwei Aufnahmen-Listen
 
 - **Oben, unter dem Funk-Pegel: „♫ Nachhören letzte Funksprüche"** — kompakte Liste,
-  Zeile antippen spielt den Clip **laut** ab: mit HomePods auf die HomePods
+  ein-/ausklappbar (default zu). Zeile antippen spielt den Clip **laut** ab: mit HomePods auf die HomePods
   (`vhf-playout.sh`), **ohne HomePods automatisch auf den Messe-Ausgang**
   (`vhf-messe-play.sh` → ALSA `vhfoutplug`, Lautstärke = Messe-Regler). ✓/✗ ordnet ein.
   Der Untertitel der Karte zeigt das aktuelle Ziel („· auf die HomePods" / „· auf die Messe").

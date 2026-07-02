@@ -9,8 +9,7 @@ OWNTONE = "http://localhost:3689"
 DELAY_MIN, DELAY_MAX = 0.0, 30.0
 PORT = int(os.environ.get("VHF_PANEL_PORT", "8090"))
 WEB_PORT = int(os.environ.get("VHF_WEB_PORT", "8088"))   # interne Nachhoer-Liste (Proxy /rec)
-SERVICES = {"monitor": "vhf-monitor", "homepods": "vhf-audio-bridge",
-            "airplay": "shairport-sync"}
+SERVICES = {"monitor": "vhf-monitor"}   # einziger im Panel schaltbarer Dienst (Live-Monitor)
 
 # ---- Konfiguration (Schiffsname, HomePod-Modus) -----------------------------
 # Einfache key=value-Datei, siehe etc/vhf.conf.example. Fehlt sie, gelten die
@@ -111,34 +110,12 @@ def svc_states():
 def set_svc(unit, on):
     subprocess.run(["systemctl", "start" if on else "stop", unit], timeout=15)
 
-def autoselect_on():
-    try:
-        r = subprocess.run(["systemctl", "is-active", "vhf-shipods.timer"],
-                           capture_output=True, text=True, timeout=4)
-        return r.stdout.strip() == "active"
-    except Exception:
-        return False
-
-def set_autoselect(on):
-    if on:
-        subprocess.run(["systemctl", "enable", "--now", "vhf-shipods.timer"], timeout=15)
-        subprocess.run(["systemctl", "start", "vhf-shipods.service"], timeout=15)
-    else:
-        subprocess.run(["systemctl", "disable", "--now", "vhf-shipods.timer"], timeout=15)
-
 def owntone_outputs():
     try:
         with urllib.request.urlopen(OWNTONE + "/api/outputs", timeout=4) as r:
             return json.load(r).get("outputs", [])
     except Exception:
         return []
-
-def owntone_player():
-    try:
-        with urllib.request.urlopen(OWNTONE + "/api/player", timeout=4) as r:
-            return json.load(r).get("state", "?")
-    except Exception:
-        return "?"
 
 def get_hpvol(outs):
     v = [o["volume"] for o in outs if o["name"].startswith("ShiPod")]
@@ -185,15 +162,6 @@ def read_file_level(path):
     except Exception:
         return 0.0
 
-def airplay_devices(outs, glvl):
-    res = []
-    for o in outs:
-        if "AirPlay" in o.get("type", "") and o.get("name") != "Wilhelmina_AUX":
-            lvl = glvl * (o.get("volume", 0) / 100.0) if o.get("selected") else 0.0
-            res.append({"name": o["name"], "sel": bool(o.get("selected")),
-                        "vol": o.get("volume", 0), "level": round(lvl, 3)})
-    return res
-
 def shipod_status(outs):
     by = {o.get("name"): o for o in outs}
     res = []
@@ -212,23 +180,17 @@ def heavy():
         outs = owntone_outputs()
         svc = svc_states()
         _cache["d"] = {"outs": outs, "svc": svc, "hpvol": get_hpvol(outs),
-                       "monvol": get_monvol(), "player": owntone_player(),
-                       "delay": read_delay(), "autoselect": autoselect_on()}
+                       "monvol": get_monvol(), "delay": read_delay()}
         _cache["t"] = now
     return _cache["d"]
 
 def state():
     h = heavy()
     vhf_lvl = read_file_level(LEVEL_FILE)             # Pegel immer frisch (fluessige Anzeige)
-    air_lvl = read_file_level("/run/vhf/airplay-level")
-    glvl = max(vhf_lvl, air_lvl)
     svc = h["svc"]
     return {"delay": h["delay"], "delay_max": DELAY_MAX,
-            "hpvol": h["hpvol"], "monvol": h["monvol"],
-            "level": vhf_lvl, "airdev": airplay_devices(h["outs"], glvl),
-            "player": h["player"],
-            "monitor": svc["monitor"], "homepods": svc["homepods"],
-            "airplay": svc["airplay"], "autoselect": h["autoselect"],
+            "hpvol": h["hpvol"], "monvol": h["monvol"], "level": vhf_lvl,
+            "monitor": svc["monitor"],
             "mute": read_mute(), "pods_net": pods_net(),
             "pods": pods_enabled(h["outs"]),
             "shipods": shipod_status(h["outs"])}
@@ -503,9 +465,12 @@ input[type=range]::-moz-range-thumb{width:26px;height:26px;border-radius:50%;bac
     <div class="meter vu"><div id=lvl></div><span id=pk class=pk></span></div>
   </div>
 
-  <div class=card id=reccard>
-    <div class=mlab>&#9835; Nachh&ouml;ren letzte Funkspr&uuml;che <span id=rectgt style="color:#6f8497;text-transform:none;letter-spacing:0">&middot; auf die HomePods</span></div>
-    <div id=reclist class="reclist open"></div>
+  <div class=card id=reccard style="padding:0;overflow:hidden">
+    <button id=recbtn2 onclick="toggleCompact()" style="width:100%;background:none;border:none;color:#7fd1ff;font-size:15px;text-align:left;padding:14px 16px;display:flex;align-items:center;gap:8px;cursor:pointer">
+      <span>&#9835; Nachh&ouml;ren letzte Funkspr&uuml;che</span>
+      <span id=rectgt style="color:#6f8497;font-size:12px">&middot; auf die HomePods</span>
+      <span id=recchev style="margin-left:auto">&#9662;</span></button>
+    <div id=reclist class=reclist style="margin:0 16px 14px"></div>
   </div>
 
   <div class=card>
@@ -586,6 +551,13 @@ function applyPods(on){                 // keine HomePods an Bord -> HomePod-Kar
   const rt=$('rectgt'); if(rt) rt.textContent=on?'· auf die HomePods':'· auf die Messe';
   const sub=$('sub'); if(sub) sub.textContent=on?'VHF-MONITOR · AIRPLAY':'VHF-MONITOR · MESSE';}
 
+let recOpen=false;                       // Kompakt-Liste oben: ein-/ausklappbar, default aus
+function toggleCompact(){
+  recOpen=!recOpen;
+  $('reclist').classList.toggle('open',recOpen);
+  $('recchev').innerHTML=recOpen?'&#9652;':'&#9662;';
+  if(recOpen)recPoll();}
+
 function toggleRecs(){                   // Aufnahmen-Liste ein-/ausklappen; lazy beim 1. Mal
   const b=$('recbtn'), w=$('recwrap'), f=$('recframe'), sp=$('recspin');
   const open = (w.style.display==='none' || !w.style.display);
@@ -662,7 +634,7 @@ function agefmt(s){
   const d=Math.floor(h/24), rh=h%24;
   return 'vor '+d+' T '+rh+':'+p(rm)+' Std';
 }
-async function recPoll(){if(playing)return;   // waehrend Wiedergabe Liste nicht neu aufbauen (VU-Overlay)
+async function recPoll(){if(playing||!recOpen)return;   // zu / Wiedergabe -> nicht neu aufbauen
   try{const r=await fetch('/api/recs');const list=await r.json();
   const c=$('reclist');if(!c)return;
   if(!list.length){c.innerHTML='<div class=rec style="opacity:.5;border-left-color:#444">noch keine</div>';return;}
@@ -757,11 +729,6 @@ class H(BaseHTTPRequestHandler):
             set_svc(unit, on)
             invalidate_cache()
             self._send(200, json.dumps({"ok": on}))
-        elif u.path == "/api/autoselect":
-            on = q.get("on", ["1"])[0] not in ("0", "false", "off")
-            set_autoselect(on)
-            invalidate_cache()
-            self._send(200, json.dumps({"autoselect": on}))
         elif u.path == "/api/mute":
             on = q.get("on", ["1"])[0] not in ("0", "false", "off")
             self._send(200, json.dumps({"mute": set_mute(on)}))
