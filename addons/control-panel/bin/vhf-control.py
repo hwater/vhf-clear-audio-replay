@@ -498,6 +498,14 @@ input[type=range]::-moz-range-thumb{width:26px;height:26px;border-radius:50%;bac
     <div class="meter vu"><div id=lvl></div><span id=pk class=pk></span></div>
   </div>
 
+  <div class=card>
+    <div class=mlab>Messe-Monitor (latenzarm)</div>
+    <div class=btns>
+      <button class=tg id=bmon><span class=dot></span>Live-Monitor<span class=sub2>VHF &rarr; Messe-Lautsprecher</span></button>
+    </div>
+    <div class=fader><label>Lautst&auml;rke</label><input type=range id=smon min=0 max=100 step=1><span class=val id=vmon>38</span></div>
+  </div>
+
   <div class=card id=hpcard>
     <div class=mlab>VHF-&Uuml;bernahme (HomePods)</div>
     <div id=podnet class=podnet></div>
@@ -509,16 +517,12 @@ input[type=range]::-moz-range-thumb{width:26px;height:26px;border-radius:50%;bac
   </div>
 
   <div class=card>
-    <div class=mlab>Messe-Monitor (latenzarm)</div>
-    <div class=btns>
-      <button class=tg id=bmon><span class=dot></span>Live-Monitor<span class=sub2>VHF &rarr; Messe-Lautsprecher</span></button>
+    <div class=mlab>&#9835; Aufnahmen</div>
+    <button class=recbtn id=recbtn onclick="showRecs()">&#9835; Nachh&ouml;ren &ndash; Aufnahmen laden</button>
+    <div id=recwrap style="display:none">
+      <div id=recspin style="text-align:center;padding:1.2em;color:#8fa2b6"><span class=spin></span> l&auml;dt &hellip;</div>
+      <iframe id=recframe class=recframe title=Aufnahmen style="display:none"></iframe>
     </div>
-    <div class=fader><label>Lautst&auml;rke</label><input type=range id=smon min=0 max=100 step=1><span class=val id=vmon>38</span></div>
-  </div>
-
-  <div class=card>
-    <div class=mlab>&#9835; Aufnahmen &ndash; nachh&ouml;ren</div>
-    <iframe id=recframe class=recframe title=Aufnahmen src="/rec/?embed=1"></iframe>
   </div>
 </div>
 </div>
@@ -572,6 +576,13 @@ async function poll(){try{const r=await fetch('/api/state');const s=await r.json
 function applyPods(on){                 // keine HomePods an Bord -> nur Messe zeigen
   const hp=$('hpcard'); if(hp) hp.style.display=on?'':'none';
   const sub=$('sub'); if(sub) sub.textContent=on?'VHF-MONITOR · AIRPLAY':'VHF-MONITOR · MESSE';}
+
+function showRecs(){                     // Aufnahmen-Liste erst auf Klick laden (schneller Aufbau)
+  const b=$('recbtn'), w=$('recwrap'), f=$('recframe'), sp=$('recspin');
+  b.style.display='none'; w.style.display='block'; sp.style.display='block';
+  document.body.style.cursor='progress';
+  f.onload=function(){sp.style.display='none'; f.style.display='block'; document.body.style.cursor='';};
+  f.src='/rec/?embed=1';}
 
 function renderPodNet(n){const e=$('podnet');if(!e)return;
   if(n&&(!n.bb||!n.sb)){
