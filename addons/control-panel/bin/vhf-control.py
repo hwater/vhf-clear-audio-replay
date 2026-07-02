@@ -249,7 +249,10 @@ def replay_file(name=None):
         if not files:
             return None
         path = max(files, key=os.path.getmtime)
-    subprocess.Popen(["/usr/local/bin/vhf-playout.sh", path, "now"])
+    if pods_enabled(owntone_outputs()):
+        subprocess.Popen(["/usr/local/bin/vhf-playout.sh", path, "now"])   # auf die HomePods
+    else:
+        subprocess.Popen(["/usr/local/bin/vhf-messe-play.sh", path])       # sonst: Messe-Ausgang
     return os.path.basename(path)
 
 def pods_net():     # Netz-Erreichbarkeit der HomePods (von vhf-podwatch.sh)
@@ -366,6 +369,8 @@ def read_mute():
 
 def stop_playout():   # laufende Uebernahme/Wiedergabe sofort beenden + HomePods freigeben
     subprocess.run(["pkill", "-f", "vhf-playout.sh"], timeout=5)
+    subprocess.run(["pkill", "-f", "vhf-messe-play.sh"], timeout=5)     # Messe-Wiedergabe
+    subprocess.run(["pkill", "-f", "aplay -q -D vhfoutplug"], timeout=5)
     try:
         req = urllib.request.Request(OWNTONE + "/api/player/stop", method="PUT")
         urllib.request.urlopen(req, timeout=4).read()
@@ -499,7 +504,7 @@ input[type=range]::-moz-range-thumb{width:26px;height:26px;border-radius:50%;bac
   </div>
 
   <div class=card id=reccard>
-    <div class=mlab>&#9835; Nachh&ouml;ren letzte Funkspr&uuml;che <span style="color:#6f8497;text-transform:none;letter-spacing:0">&middot; auf die HomePods</span></div>
+    <div class=mlab>&#9835; Nachh&ouml;ren letzte Funkspr&uuml;che <span id=rectgt style="color:#6f8497;text-transform:none;letter-spacing:0">&middot; auf die HomePods</span></div>
     <div id=reclist class="reclist open"></div>
   </div>
 
@@ -576,9 +581,9 @@ async function poll(){try{const r=await fetch('/api/state');const s=await r.json
   renderPods(s.shipods||[]);
 }catch(e){}}
 
-function applyPods(on){                 // keine HomePods an Bord -> HomePod-Teile ausblenden
+function applyPods(on){                 // keine HomePods an Bord -> HomePod-Karte weg, Kompakt-Liste bleibt (Messe)
   const hp=$('hpcard'); if(hp) hp.style.display=on?'':'none';
-  const rc=$('reccard'); if(rc) rc.style.display=on?'':'none';   // Kompakt-Liste spielt auf HomePods
+  const rt=$('rectgt'); if(rt) rt.textContent=on?'· auf die HomePods':'· auf die Messe';
   const sub=$('sub'); if(sub) sub.textContent=on?'VHF-MONITOR · AIRPLAY':'VHF-MONITOR · MESSE';}
 
 function toggleRecs(){                   // Aufnahmen-Liste ein-/ausklappen; lazy beim 1. Mal

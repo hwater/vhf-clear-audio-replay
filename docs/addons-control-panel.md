@@ -15,9 +15,10 @@ Dateien: [`addons/control-panel/`](../addons/control-panel/)
 ```
 addons/control-panel/
 ├── bin/
-│   ├── vhf-control.py    das Panel (Port 8090)
-│   ├── vhf-monitor.sh    latenzarmer Live-Monitor: VHF → Messe-Lautsprecher (~100 ms)
-│   └── vhf-level.py      Pegelmessung → /run/vhf/level (Quelle fürs VU-Meter)
+│   ├── vhf-control.py     das Panel (Port 8090)
+│   ├── vhf-monitor.sh     latenzarmer Live-Monitor: VHF → Messe-Lautsprecher (~100 ms)
+│   ├── vhf-level.py       Pegelmessung → /run/vhf/level (Quelle fürs VU-Meter)
+│   └── vhf-messe-play.sh  spielt einen Clip auf den Messe-Ausgang (ohne HomePods)
 └── systemd/
     ├── vhf-control.service
     ├── vhf-monitor.service
@@ -64,18 +65,29 @@ eingebettete Aufnahmen-Ansicht im Panel zeigt auf `/rec/` — nach außen genüg
   über den Proxy — die Client-Pfade sind relativ, damit das sowohl direkt (8088)
   als auch eingebettet (8090/rec) funktioniert.
 
+## Zwei Aufnahmen-Listen
+
+- **Oben, unter dem Funk-Pegel: „♫ Nachhören letzte Funksprüche"** — kompakte Liste,
+  Zeile antippen spielt den Clip **laut** ab: mit HomePods auf die HomePods
+  (`vhf-playout.sh`), **ohne HomePods automatisch auf den Messe-Ausgang**
+  (`vhf-messe-play.sh` → ALSA `vhfoutplug`, Lautstärke = Messe-Regler). ✓/✗ ordnet ein.
+  Der Untertitel der Karte zeigt das aktuelle Ziel („· auf die HomePods" / „· auf die Messe").
+- **Ganz unten: „♫ Alle Aufnahmen – am Gerät anhören"** — die volle Nachhör-Liste
+  (Wellenform, Wiedergabe **im Browser**, Download), ein-/ausklappbar, lazy geladen.
+
 ## Was das Panel nutzt
 
 | Funktion | Abhängigkeit |
 |---|---|
 | Funk-Pegel (VU) | `vhf-level` schreibt `/run/vhf/level` |
 | Messe-Live-Monitor (An/Aus + Lautstärke) | `vhf-monitor` + ALSA-Mixer `Speaker` (Karte 3) |
-| Aufnahmen-Liste | Nachhör-Kern `vhf-web` (intern :8088), eingebettet über Proxy `/rec/` |
+| Kompakt-Liste laut abspielen | mit Pods `vhf-playout.sh` (HomePod-Add-on), sonst `vhf-messe-play.sh` (Messe) |
+| Volle Aufnahmen-Liste (Browser) | Nachhör-Kern `vhf-web` (intern :8088), eingebettet über Proxy `/rec/` |
 | Schiffsname | Signal K (`vessels.self.name`), sonst `/etc/vhf/vhf.conf` |
-| HomePod-Übernahme / „Funk wiederholen" | **HomePod-Add-on** (OwnTone, `vhf-playout.sh`, `vhf-shipods`) — siehe [addons-homepods.md](addons-homepods.md) |
 
 Ohne das HomePod-Add-on bleibt das Panel voll nutzbar (Messe-Betrieb); die
-HomePod-Karte wird bei `homepods = off` bzw. `auto` (ohne erkannte Pods) ausgeblendet.
+HomePod-**Karte** wird bei `homepods = off` bzw. `auto` (ohne erkannte Pods) ausgeblendet,
+die Kompakt-Liste bleibt und spielt dann auf den Messe-Ausgang.
 
 ## Installation
 
@@ -83,7 +95,8 @@ HomePod-Karte wird bei `homepods = off` bzw. `auto` (ohne erkannte Pods) ausgebl
 # Panel + Messe-Helfer
 sudo install -m755 addons/control-panel/bin/vhf-control.py \
                    addons/control-panel/bin/vhf-monitor.sh \
-                   addons/control-panel/bin/vhf-level.py   /usr/local/bin/
+                   addons/control-panel/bin/vhf-level.py \
+                   addons/control-panel/bin/vhf-messe-play.sh   /usr/local/bin/
 sudo install -m644 addons/control-panel/systemd/* /etc/systemd/system/
 
 # Konfiguration
