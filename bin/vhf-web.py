@@ -10,6 +10,8 @@ PORT = int(os.environ.get("VHF_WEB_PORT", "8088"))
 CONFIG_FILE = os.environ.get("VHF_CONFIG", "/etc/vhf/vhf.conf")
 # Poll-Intervall (Sekunden), mit dem die Seite auf neue Aufnahmen prueft.
 POLL_S = int(os.environ.get("VHF_WEB_POLL", "7"))
+# Zeitfenster (Tage): es werden nur Aufnahmen der letzten N Tage angezeigt.
+DAYS = float(os.environ.get("VHF_WEB_DAYS", "2"))
 
 def read_config():
     # shipname: "auto" = aus Signal K holen; sonst woertlich (Override).
@@ -90,20 +92,27 @@ def _dt(f):
     return ("%s-%s-%s" % (m.group(1), m.group(2), m.group(3)),
             "%s:%s:%s" % (m.group(4), m.group(5), m.group(6)))
 
-def all_recs(limit=80):
-    # echte + aussortierte Aufnahmen in EINER Liste, neueste zuerst.
+def all_recs(days=None, limit=500):
+    # echte + aussortierte Aufnahmen in EINER Liste, neueste zuerst,
+    # beschraenkt auf die letzten `days` Tage.
+    if days is None:
+        days = DAYS
+    cutoff = time.time() - days * 86400.0
     try:
-        fs = [f for f in os.listdir(DIR) if f.endswith(".mp3")
-              and (f.startswith("VHF_") or f.startswith(".noise-VHF_"))]
+        names = [f for f in os.listdir(DIR) if f.endswith(".mp3")
+                 and (f.startswith("VHF_") or f.startswith(".noise-VHF_"))]
     except Exception:
-        fs = []
-    def mt(f):
+        names = []
+    fs = []
+    for f in names:
         try:
-            return os.path.getmtime(os.path.join(DIR, f))
+            m = os.path.getmtime(os.path.join(DIR, f))
         except Exception:
-            return 0
-    fs.sort(key=mt, reverse=True)
-    return fs[:limit]
+            continue
+        if m >= cutoff:
+            fs.append((m, f))
+    fs.sort(reverse=True)
+    return [f for _, f in fs[:limit]]
 
 def list_sig():
     # Billige Signatur (Anzahl + neueste mtime) fuer den Auto-Refresh. Aendert sich
@@ -214,6 +223,11 @@ def page(embed=False):
             ".sub{font-size:10px;color:#6f8497;letter-spacing:.18em;text-align:center;margin:2px 0 16px}"
             ".panel{max-width:620px;margin:0 auto}"
             ".hint{font-size:12px;color:#9aa3bd;line-height:1.5;margin:0 0 14px;text-align:center}"
+            ".bar{max-width:620px;margin:0 auto 12px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap}"
+            ".fbtn{border-radius:8px;padding:.5em .9em;font-size:13px;font-weight:600;"
+            "background:#0e1922;color:#9fb4c6;border:1px solid #2a3a49;cursor:pointer}"
+            ".fbtn.on{background:#163b2a;color:#9affc7;border-color:#2f7d53}"
+            "#list.hidenoise>li.noise{display:none}"
             "ul{padding:0;margin:0;list-style:none}"
             "li{background:#111a24;border:1px solid #20303d;border-radius:12px;padding:.6em .8em;margin:.55em 0}"
             "li.noise{opacity:.72}"
@@ -237,7 +251,9 @@ def page(embed=False):
             "</style></head><body>"
             + hdr +
             "<div class=panel>"
-            "<p class=hint>&#9654; Abspielen &middot; Wellenform &middot; <b>gut</b>/<b>St&ouml;rung</b> einordnen &middot; &#11015; Download</p>"
+            "<p class=hint>&#9654; Abspielen &middot; Wellenform &middot; <b>gut</b>/<b>St&ouml;rung</b> einordnen &middot; &#11015; Download"
+            "<br>Letzte " + ("%g" % DAYS) + " Tage</p>"
+            "<div class=bar><button id=fnoise class=fbtn onclick=\"togNoise()\">Ohne St&ouml;rungen</button></div>"
             "<ul id=list>" + "".join(rows) + "</ul></div>"
             "<script>"
             "var q=function(s,r){return (r||document).querySelector(s);};"
@@ -248,6 +264,12 @@ def page(embed=False):
             "var d=await r.json();if(d&&d.sig&&d.sig!==SIG){"
             "if(curA&&!curA.paused){pend=true;}else{location.reload();}}}catch(e){}}"
             "if(POLL>0)setInterval(chk,POLL);"
+            "function applyNoise(){var on=localStorage.getItem('vhfHideNoise')==='1';"
+            "var l=q('#list');if(l)l.classList.toggle('hidenoise',on);"
+            "var b=q('#fnoise');if(b)b.classList.toggle('on',on);}"
+            "function togNoise(){var on=localStorage.getItem('vhfHideNoise')==='1';"
+            "localStorage.setItem('vhfHideNoise',on?'0':'1');applyNoise();}"
+            "applyNoise();"
             "function bars(vu,env){vu.innerHTML='';"
             "var a=(env&&env.length)?env:[];if(!a.length){for(var i=0;i<40;i++)a.push(0.12);}"
             "a.forEach(function(v){var b=document.createElement('span');b.className='b';"
