@@ -299,7 +299,7 @@ def page(embed=False):
             "setStatus('Alle Aufnahmen',false);maybeReload();}"
             "function seqAt(i){if(!seq)return;if(i>=seq.length){stopSeq();return;}seqIdx=i;clearSeqUI();"
             "var li=seq[i];li.classList.add('seqp');li.scrollIntoView({block:'center'});"
-            "setStatus('Nachh\\u00f6ren noch '+(seq.length-i)+' VHF',true);"
+            "setStatus('Nachh\\u00f6ren noch '+(seq.length-i-1)+' VHF',true);"
             "SA.src=li.dataset.f;try{SA.currentTime=0;}catch(e){}var p=SA.play();if(p&&p.catch)p.catch(function(){});}"
             "SA.addEventListener('ended',function(){if(seq)seqAt(seqIdx+1);});"
             "SA.addEventListener('timeupdate',function(){if(seq&&seq[seqIdx]&&SA.duration){"
