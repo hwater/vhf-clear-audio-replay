@@ -91,6 +91,14 @@ die Kompakt-Liste bleibt und spielt dann auf den Messe-Ausgang.
 
 ## Installation
 
+Am einfachsten mit dem Add-on-Skript (Kompatibilitätscheck inklusive):
+
+```bash
+sudo ./addons/control-panel/install.sh
+```
+
+Manueller Weg:
+
 ```bash
 # Panel + Messe-Helfer
 sudo install -m755 addons/control-panel/bin/vhf-control.py \
@@ -113,9 +121,11 @@ Panel öffnen: **http://<pi>.local:8090/**
 ## Deaktivieren
 
 ```bash
+sudo ./addons/control-panel/uninstall.sh
+# oder manuell:
 sudo systemctl disable --now vhf-control vhf-level vhf-monitor
 sudo rm /etc/systemd/system/vhf-{control,level,monitor}.*
-sudo rm /usr/local/bin/vhf-{control.py,level.py,monitor.sh}
+sudo rm /usr/local/bin/vhf-{control.py,level.py,monitor.sh,messe-play.sh}
 ```
 
 ## Hinweis / Umfang

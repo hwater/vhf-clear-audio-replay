@@ -67,6 +67,15 @@ curl -s http://localhost:3689/api/outputs | python3 -m json.tool
 
 ## Installation
 
+Am einfachsten mit dem Add-on-Skript (prüft vorab OwnTone und legt die Defaults
+`delay`/`hpvol` an; erinnert an die Geräte-IDs):
+
+```bash
+sudo ./addons/homepods/install.sh        # entfernen: uninstall.sh [--purge]
+```
+
+Manueller Weg:
+
 ```bash
 sudo install -m755 addons/homepods/bin/*.sh /usr/local/bin/
 sudo install -m644 addons/homepods/systemd/* /etc/systemd/system/
@@ -84,8 +93,10 @@ am Recorder nötig.
 ## Deaktivieren
 
 ```bash
+sudo ./addons/homepods/uninstall.sh      # --purge loescht auch /var/lib/vhf
+# oder manuell:
 sudo systemctl disable --now vhf-shipods.timer vhf-podwatch
-sudo rm /usr/local/bin/vhf-playout.sh    # Recorder überspringt die Übernahme dann wieder
+sudo rm /usr/local/bin/vhf-{playout,shipods,podwatch}.sh   # Recorder ueberspringt die Uebernahme dann wieder
 ```
 
 ## Hinweis / Umfang

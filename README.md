@@ -62,10 +62,21 @@ Am einfachsten über das Installationsskript – es prüft vorab die Kompatibili
 (Raspberry Pi / Linux / systemd) und richtet dann alles ein:
 
 ```bash
-sudo ./install.sh            # Vollinstallation inkl. Kompatibilitaetscheck
+sudo ./install.sh            # nur Nachhoer-Kern (inkl. Kompatibilitaetscheck)
 ./install.sh --check         # nur pruefen, ob das System passt (ohne root)
 sudo ./uninstall.sh          # entfernen (Aufnahmen bleiben; --purge loescht auch die)
 ```
+
+Alles auf einmal (Kern + Bedienpanel, HomePods optional):
+
+```bash
+sudo ./install-all.sh                    # Kern + Panel (:8090)
+sudo ./install-all.sh --with-homepods    # zusaetzlich HomePod-/AirPlay-Add-on
+sudo ./uninstall-all.sh                  # alles wieder entfernen
+```
+
+Einzelne Add-ons haben je ein eigenes `install.sh`/`uninstall.sh`, z. B.
+`sudo ./addons/control-panel/install.sh` bzw. `sudo ./addons/homepods/install.sh`.
 
 Optionen: `--skip-deps` (apt überspringen), `--no-enable` (nicht starten),
 `--force` (Warnungen ignorieren). Manueller Weg (Kurzform):
