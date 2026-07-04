@@ -8,6 +8,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 DIR = os.environ.get("VHF_DIR", "/srv/music/VHF-Aufnahmen")
 PORT = int(os.environ.get("VHF_WEB_PORT", "8088"))
 CONFIG_FILE = os.environ.get("VHF_CONFIG", "/etc/vhf/vhf.conf")
+# Poll-Intervall (Sekunden), mit dem die Seite auf neue Aufnahmen prueft.
+POLL_S = int(os.environ.get("VHF_WEB_POLL", "7"))
 
 def read_config():
     # shipname: "auto" = aus Signal K holen; sonst woertlich (Override).
@@ -102,6 +104,25 @@ def all_recs(limit=80):
             return 0
     fs.sort(key=mt, reverse=True)
     return fs[:limit]
+
+def list_sig():
+    # Billige Signatur (Anzahl + neueste mtime) fuer den Auto-Refresh. Aendert sich
+    # bei einer neuen Aufnahme, aber NICHT beim Umbenennen (classify) – so loesen
+    # eigene gut/Stoerung-Klicks keinen Reload aus.
+    try:
+        fs = [f for f in os.listdir(DIR) if f.endswith(".mp3")
+              and (f.startswith("VHF_") or f.startswith(".noise-VHF_"))]
+    except Exception:
+        fs = []
+    newest = 0.0
+    for f in fs:
+        try:
+            m = os.path.getmtime(os.path.join(DIR, f))
+            if m > newest:
+                newest = m
+        except Exception:
+            pass
+    return "%d:%.0f" % (len(fs), newest)
 
 _env_cache = {}
 
@@ -221,6 +242,12 @@ def page(embed=False):
             "<script>"
             "var q=function(s,r){return (r||document).querySelector(s);};"
             "var curA=null;"
+            "var SIG=" + json.dumps(list_sig()) + ",POLL=" + str(POLL_S * 1000) + ",pend=false;"
+            "function maybeReload(){if(pend&&(!curA||curA.paused))location.reload();}"
+            "async function chk(){try{var r=await fetch('list',{cache:'no-store'});"
+            "var d=await r.json();if(d&&d.sig&&d.sig!==SIG){"
+            "if(curA&&!curA.paused){pend=true;}else{location.reload();}}}catch(e){}}"
+            "if(POLL>0)setInterval(chk,POLL);"
             "function bars(vu,env){vu.innerHTML='';"
             "var a=(env&&env.length)?env:[];if(!a.length){for(var i=0;i<40;i++)a.push(0.12);}"
             "a.forEach(function(v){var b=document.createElement('span');b.className='b';"
@@ -237,8 +264,8 @@ def page(embed=False):
             "var a=q('audio',li),btn=q('.play',li),vu=q('.vu',li);"
             "a.addEventListener('play',function(){if(curA&&curA!==a)curA.pause();curA=a;"
             "btn.classList.add('playing');btn.innerHTML='&#9208;';});"
-            "a.addEventListener('pause',function(){btn.classList.remove('playing');btn.innerHTML='&#9654;';});"
-            "a.addEventListener('ended',function(){setProg(vu,0);});"
+            "a.addEventListener('pause',function(){btn.classList.remove('playing');btn.innerHTML='&#9654;';maybeReload();});"
+            "a.addEventListener('ended',function(){setProg(vu,0);maybeReload();});"
             "a.addEventListener('timeupdate',function(){if(a.duration)setProg(vu,a.currentTime/a.duration);});"
             "});"
             "function play(btn){var a=q('audio',btn.closest('li'));if(a.paused){a.play();}else{a.pause();}}"
@@ -262,6 +289,13 @@ class H(BaseHTTPRequestHandler):
             b = page(embed).encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
+            self.send_header("Content-Length", str(len(b)))
+            self.end_headers(); self.wfile.write(b)
+        elif p.path == "/list":
+            b = json.dumps({"sig": list_sig()}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
             self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
             self.send_header("Content-Length", str(len(b)))
             self.end_headers(); self.wfile.write(b)
