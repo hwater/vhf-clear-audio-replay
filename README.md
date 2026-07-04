@@ -58,7 +58,17 @@ Herunterladen und Aussortieren bereitstellt.
 
 ## Schnellstart
 
-Siehe [docs/install.de.md](docs/install.de.md) für alle Schritte. Kurzform:
+Am einfachsten über das Installationsskript – es prüft vorab die Kompatibilität
+(Raspberry Pi / Linux / systemd) und richtet dann alles ein:
+
+```bash
+sudo ./install.sh            # Vollinstallation inkl. Kompatibilitaetscheck
+./install.sh --check         # nur pruefen, ob das System passt (ohne root)
+sudo ./uninstall.sh          # entfernen (Aufnahmen bleiben; --purge loescht auch die)
+```
+
+Optionen: `--skip-deps` (apt überspringen), `--no-enable` (nicht starten),
+`--force` (Warnungen ignorieren). Manueller Weg (Kurzform):
 
 ```bash
 # 1) Pakete

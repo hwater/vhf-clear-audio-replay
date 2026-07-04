@@ -4,6 +4,23 @@
 
 Getestet auf Raspberry Pi OS (Trixie). Alle Schritte als Benutzer mit `sudo`.
 
+## Automatisch (empfohlen)
+
+Das Skript `install.sh` prüft zuerst die Kompatibilität (Raspberry Pi, Linux,
+systemd, Paketmanager, USB-Adapter) und führt danach alle unten beschriebenen
+Schritte aus:
+
+```bash
+./install.sh --check      # nur Kompatibilitaetscheck (ohne root, veraendert nichts)
+sudo ./install.sh         # Vollinstallation
+```
+
+Optionen: `--skip-deps` (apt überspringen), `--no-enable` (Dienste nicht starten),
+`--force` (Kompatibilitätswarnungen ignorieren). Entfernen mit `sudo ./uninstall.sh`
+(Aufnahmen bleiben erhalten; `--purge` löscht auch Aufnahmen und `/etc/vhf`).
+
+Die manuellen Einzelschritte folgen zur Nachvollziehbarkeit / für Sonderfälle.
+
 ## 1. Pakete
 
 ```bash
@@ -77,6 +94,9 @@ Browser: **http://<pi>.local:8088/** – nach dem ersten Funkspruch erscheint ei
 Aufnahme. Über den Klassifikator geht mit: `tail -f /run/vhf/classify.log`.
 
 ## Deinstallation
+
+Am einfachsten mit `sudo ./uninstall.sh` (mit `--purge` werden auch die Aufnahmen
+und `/etc/vhf` gelöscht). Manuell:
 
 ```bash
 sudo systemctl disable --now vhf-recorder vhf-web vhf-cleanup.timer
