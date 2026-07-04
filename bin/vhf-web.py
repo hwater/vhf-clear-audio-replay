@@ -10,6 +10,8 @@ PORT = int(os.environ.get("VHF_WEB_PORT", "8088"))
 CONFIG_FILE = os.environ.get("VHF_CONFIG", "/etc/vhf/vhf.conf")
 # Poll-Intervall (Sekunden), mit dem die Seite auf neue Aufnahmen prueft.
 POLL_S = int(os.environ.get("VHF_WEB_POLL", "7"))
+# Zeitfenster (Tage): es werden nur Aufnahmen der letzten N Tage angezeigt.
+DAYS = float(os.environ.get("VHF_WEB_DAYS", "7"))
 
 def read_config():
     # shipname: "auto" = aus Signal K holen; sonst woertlich (Override).
@@ -90,20 +92,27 @@ def _dt(f):
     return ("%s-%s-%s" % (m.group(1), m.group(2), m.group(3)),
             "%s:%s:%s" % (m.group(4), m.group(5), m.group(6)))
 
-def all_recs(limit=80):
-    # echte + aussortierte Aufnahmen in EINER Liste, neueste zuerst.
+def all_recs(days=None, limit=2000):
+    # echte + aussortierte Aufnahmen in EINER Liste, neueste zuerst,
+    # beschraenkt auf die letzten `days` Tage.
+    if days is None:
+        days = DAYS
+    cutoff = time.time() - days * 86400.0
     try:
-        fs = [f for f in os.listdir(DIR) if f.endswith(".mp3")
-              and (f.startswith("VHF_") or f.startswith(".noise-VHF_"))]
+        names = [f for f in os.listdir(DIR) if f.endswith(".mp3")
+                 and (f.startswith("VHF_") or f.startswith(".noise-VHF_"))]
     except Exception:
-        fs = []
-    def mt(f):
+        names = []
+    fs = []
+    for f in names:
         try:
-            return os.path.getmtime(os.path.join(DIR, f))
+            m = os.path.getmtime(os.path.join(DIR, f))
         except Exception:
-            return 0
-    fs.sort(key=mt, reverse=True)
-    return fs[:limit]
+            continue
+        if m >= cutoff:
+            fs.append((m, f))
+    fs.sort(reverse=True)
+    return [f for _, f in fs[:limit]]
 
 def list_sig():
     # Billige Signatur (Anzahl + neueste mtime) fuer den Auto-Refresh. Aendert sich
@@ -182,10 +191,15 @@ def page(embed=False):
     for f in all_recs():
         noise = f.startswith(".noise-")
         d, t = _dt(f)
-        du = dur_str(os.path.join(DIR, f))
+        path = os.path.join(DIR, f)
+        du = dur_str(path)
+        try:
+            ts = int(os.path.getmtime(path))
+        except Exception:
+            ts = 0
         fe = html.escape(f)
         rows.append(
-            "<li class=\"rec%s\" data-f=\"%s\" data-noise=\"%d\">"
+            "<li class=\"rec%s\" data-f=\"%s\" data-noise=\"%d\" data-ts=\"%d\">"
             "<div class=hd><span class=t>%s&nbsp;&nbsp;%s</span><span class=s>%s</span></div>"
             "<div class=ctl>"
             "<button class=play aria-label=Abspielen onclick=\"play(this)\">&#9654;</button>"
@@ -195,7 +209,7 @@ def page(embed=False):
             "<a class=dlb href=\"%s\" download title=Download>&#11015;</a>"
             "</div>"
             "<audio preload=none src=\"%s\"></audio></li>"
-            % (" noise" if noise else "", fe, 1 if noise else 0,
+            % (" noise" if noise else "", fe, 1 if noise else 0, ts,
                html.escape(d), html.escape(t), du,
                "" if noise else " on", " on" if noise else "", fe, fe))
     if not rows:
@@ -214,6 +228,16 @@ def page(embed=False):
             ".sub{font-size:10px;color:#6f8497;letter-spacing:.18em;text-align:center;margin:2px 0 16px}"
             ".panel{max-width:620px;margin:0 auto}"
             ".hint{font-size:12px;color:#9aa3bd;line-height:1.5;margin:0 0 14px;text-align:center}"
+            ".bar{max-width:620px;margin:0 auto 8px;display:flex;gap:5px;justify-content:center;flex-wrap:wrap}"
+            ".fbtn{border-radius:7px;padding:.28em .55em;font-size:11px;font-weight:600;line-height:1.3;"
+            "background:#0e1922;color:#9fb4c6;border:1px solid #2a3a49;cursor:pointer}"
+            ".fbtn.on{background:#163b2a;color:#9affc7;border-color:#2f7d53}"
+            ".status{max-width:620px;margin:.2em auto .7em;text-align:center;font-size:11px;"
+            "letter-spacing:.14em;text-transform:uppercase;color:#8fa2b6}"
+            ".status.live{color:var(--accent)}"
+            "#list.hidenoise>li.noise{display:none}"
+            "li.rec.seqp{border-color:var(--accent);background:#16232f;"
+            "box-shadow:0 0 0 1px var(--accent) inset}"
             "ul{padding:0;margin:0;list-style:none}"
             "li{background:#111a24;border:1px solid #20303d;border-radius:12px;padding:.6em .8em;margin:.55em 0}"
             "li.noise{opacity:.72}"
@@ -237,17 +261,67 @@ def page(embed=False):
             "</style></head><body>"
             + hdr +
             "<div class=panel>"
-            "<p class=hint>&#9654; Abspielen &middot; Wellenform &middot; <b>gut</b>/<b>St&ouml;rung</b> einordnen &middot; &#11015; Download</p>"
-            "<ul id=list>" + "".join(rows) + "</ul></div>"
+            "<p class=hint>&#9654; Abspielen &middot; Wellenform &middot; <b>gut</b>/<b>St&ouml;rung</b> einordnen &middot; &#11015; Download"
+            "<br>Letzte " + ("%g" % DAYS) + " Tage</p>"
+            "<div class=bar>"
+            "<button id=fnoise class=fbtn onclick=\"togNoise()\">St&ouml;rungen ausblenden</button>"
+            "<button class=\"fbtn seqb\" onclick=\"seqRange(this,'ten')\">H&ouml;re die letzten Zehn</button>"
+            "<button class=\"fbtn seqb\" onclick=\"seqRange(this,'day')\">Letzter Tag</button>"
+            "<button class=\"fbtn seqb\" onclick=\"seqRange(this,'week')\">Alle 7 Tage</button>"
+            "</div>"
+            "<div id=status class=status>Alle Aufnahmen</div>"
+            "<ul id=list>" + "".join(rows) + "</ul>"
+            "<audio id=seqAudio preload=none></audio></div>"
             "<script>"
             "var q=function(s,r){return (r||document).querySelector(s);};"
             "var curA=null;"
             "var SIG=" + json.dumps(list_sig()) + ",POLL=" + str(POLL_S * 1000) + ",pend=false;"
-            "function maybeReload(){if(pend&&(!curA||curA.paused))location.reload();}"
+            "var SA=document.getElementById('seqAudio');"
+            "function playing(){return (curA&&!curA.paused)||(SA&&!SA.paused);}"
+            "function maybeReload(){if(pend&&!playing())location.reload();}"
             "async function chk(){try{var r=await fetch('list',{cache:'no-store'});"
             "var d=await r.json();if(d&&d.sig&&d.sig!==SIG){"
-            "if(curA&&!curA.paused){pend=true;}else{location.reload();}}}catch(e){}}"
+            "if(playing()){pend=true;}else{location.reload();}}}catch(e){}}"
             "if(POLL>0)setInterval(chk,POLL);"
+            "function applyNoise(){var on=localStorage.getItem('vhfHideNoise')==='1';"
+            "var l=q('#list');if(l)l.classList.toggle('hidenoise',on);"
+            "var b=q('#fnoise');if(b)b.classList.toggle('on',on);}"
+            "function togNoise(){var on=localStorage.getItem('vhfHideNoise')==='1';"
+            "localStorage.setItem('vhfHideNoise',on?'0':'1');applyNoise();}"
+            "applyNoise();"
+            "var seq=null,seqIdx=0,seqBtn=null;"
+            "function clearSeqUI(){document.querySelectorAll('#list>li.seqp').forEach(function(li){"
+            "li.classList.remove('seqp');var v=q('.vu',li);if(v)setProg(v,0);});}"
+            "function setStatus(t,live){var s=q('#status');if(!s)return;"
+            "s.textContent=t;s.classList.toggle('live',!!live);}"
+            "function stopSeq(){if(!seq)return;seq=null;try{SA.pause();}catch(e){}SA.removeAttribute('src');"
+            "clearSeqUI();if(seqBtn){seqBtn.classList.remove('on');seqBtn=null;}"
+            "var st=q('#status'),ls=q('#list');if(st&&ls)ls.parentNode.insertBefore(st,ls);"
+            "setStatus('Alle Aufnahmen',false);maybeReload();}"
+            "function seqAt(i){if(!seq)return;if(i>=seq.length){stopSeq();return;}seqIdx=i;clearSeqUI();"
+            "var li=seq[i];li.classList.add('seqp');"
+            "var st=q('#status');if(st)li.insertAdjacentElement('afterend',st);"
+            "li.scrollIntoView({block:'center'});"
+            "setStatus('Nachh\\u00f6ren noch '+(seq.length-i-1)+' VHF',true);"
+            "SA.src=li.dataset.f;try{SA.currentTime=0;}catch(e){}var p=SA.play();if(p&&p.catch)p.catch(function(){});}"
+            "SA.addEventListener('ended',function(){if(seq)seqAt(seqIdx+1);});"
+            "SA.addEventListener('timeupdate',function(){if(seq&&seq[seqIdx]&&SA.duration){"
+            "var vu=q('.vu',seq[seqIdx]);if(vu)setProg(vu,SA.currentTime/SA.duration);}});"
+            "function visRows(){var hide=q('#list').classList.contains('hidenoise');var out=[];"
+            "document.querySelectorAll('#list>li.rec').forEach(function(li){"
+            "if(hide&&li.classList.contains('noise'))return;out.push(li);});return out;}"
+            "function startSeq(list,btn){stopSeq();if(!list||!list.length)return;"
+            "if(curA){try{curA.pause();}catch(e){}}seq=list;seqIdx=0;seqBtn=btn;"
+            "if(btn)btn.classList.add('on');seqAt(0);}"
+            "function seqRange(btn,kind){var rows=visRows();"
+            "if(kind==='ten'){rows=rows.slice(0,10);}"
+            "else{var sec=(kind==='day')?86400:7*86400,cut=Date.now()/1000-sec;"
+            "rows=rows.filter(function(li){return (+li.dataset.ts||0)>=cut;});}"
+            "rows.reverse();startSeq(rows,btn);}"
+            "document.addEventListener('click',function(e){if(!seq)return;"
+            "if(e.target.closest('li.seqp')){e.preventDefault();e.stopPropagation();stopSeq();return;}"
+            "if(e.target.closest('.cl'))return;"
+            "e.preventDefault();e.stopPropagation();stopSeq();},true);"
             "function bars(vu,env){vu.innerHTML='';"
             "var a=(env&&env.length)?env:[];if(!a.length){for(var i=0;i<40;i++)a.push(0.12);}"
             "a.forEach(function(v){var b=document.createElement('span');b.className='b';"
