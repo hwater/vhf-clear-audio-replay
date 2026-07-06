@@ -488,7 +488,7 @@ input[type=range]::-moz-range-thumb{width:26px;height:26px;border-radius:50%;bac
     <div id=shipodstat class=shipodstat></div>
   </div>
 
-  <button class=recbtn id=recbtn onclick="toggleRecs()">&#9835; Alle Aufnahmen &ndash; am Ger&auml;t anh&ouml;ren &#9662;</button>
+  <button class=recbtn id=recbtn onclick="toggleRecs()" style="position:sticky;top:8px;z-index:6">&#9835; Alle Aufnahmen &ndash; am Ger&auml;t anh&ouml;ren &#9662;</button>
   <div id=recwrap style="display:none">
     <div id=recspin style="text-align:center;padding:1.2em;color:#8fa2b6"><span class=spin></span> l&auml;dt &hellip;</div>
     <iframe id=recframe class=recframe title=Aufnahmen style="display:none"></iframe>
