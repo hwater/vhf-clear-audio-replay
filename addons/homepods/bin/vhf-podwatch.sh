@@ -2,8 +2,8 @@
 # Ueberwacht die NETZ-Erreichbarkeit der HomePods (das war die Ausfallursache:
 # Pods faller aus dem WLAN -> OwnTone sieht sie als "not connectable").
 #  - schreibt /run/vhf/pods-net  {"bb":0/1,"sb":0/1,"ts":...}  fuers Panel
-#  - selbstheilend: sind beide wieder erreichbar, aber OwnTone hat sie nicht,
-#    OwnTone EINMAL neu starten (Cooldown 5 min, kein Dauer-Restart)
+#  - selbstheilend: sind beide erreichbar, aber OwnTone hat sie nicht (oder OwnTones
+#    HTTP-API haengt) -> OwnTone EINMAL neu starten (Cooldown 5 min, kein Dauer-Restart)
 O=http://localhost:3689
 NET=/run/vhf/pods-net
 mkdir -p /run/vhf
@@ -12,7 +12,10 @@ reachable(){ # mDNS-Resolve (faengt neue IPs ab) + AirPlay-Port 7000
     local ip; ip=$(avahi-resolve -n "$1" 2>/dev/null | awk '{print $2}')
     [ -n "$ip" ] && timeout 2 bash -c "echo >/dev/tcp/$ip/7000" 2>/dev/null
 }
-shipods_count(){ curl -s "$O/api/outputs" \
+# WICHTIG: Timeout am curl! Ohne --max-time blockiert dieser Aufruf endlos, wenn
+# OwnTones API haengt (accepted, aber keine Antwort) -> die ganze Schleife friert ein
+# und heilt nie. Mit Timeout liefert er "0" -> Selbstheilung greift auch beim API-Haenger.
+shipods_count(){ curl -s --connect-timeout 3 --max-time 5 "$O/api/outputs" \
     | python3 -c "import sys,json;print(sum(1 for o in json.load(sys.stdin).get('outputs',[]) if o['name'].startswith('ShiPod')))" 2>/dev/null || echo 0; }
 
 prev=""; last_restart=0
