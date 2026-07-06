@@ -64,14 +64,28 @@ def resolve_shipname():
         return nm                                    # expliziter Override
     return signalk_name(cfg["signalk"]) or "Wilhelmina"
 
+_pods_seen = {"t": 0.0}
+
 def pods_enabled(outs):
-    # Sind HomePods "an Bord"? auto = anhand der OwnTone-Ausgaenge erkannt.
+    # Sind HomePods "an Bord"? auto = erkannt via OwnTone-Ausgaenge ODER Netz-
+    # Erreichbarkeit (podwatch). ENTPRELLT: nach dem letzten Sichten noch 90s als
+    # "an Bord" halten, damit ein einzelner leerer/langsamer OwnTone-Poll die
+    # Anzeige nicht flackern laesst. Erst nach 90s ohne Pods -> Messe-Betrieb.
     mode = read_config()["homepods"].lower()
     if mode == "on":
         return True
     if mode == "off":
         return False
-    return any(o.get("name", "").startswith("ShiPod") for o in outs)
+    seen = any(o.get("name", "").startswith("ShiPod") for o in outs)
+    if not seen:                                  # 2. Signal: stabile Netz-Erreichbarkeit
+        pn = pods_net()
+        if pn and (pn.get("bb") or pn.get("sb")):
+            seen = True
+    now = time.monotonic()
+    if seen:
+        _pods_seen["t"] = now
+        return True
+    return _pods_seen["t"] > 0 and (now - _pods_seen["t"]) < 90
 
 def read_delay():
     try:
@@ -163,11 +177,15 @@ def read_file_level(path):
         return 0.0
 
 def shipod_status(outs):
+    # "present" = in OwnTone ODER laut podwatch im Netz erreichbar -> Badge flackert
+    # nicht bei einem kurzen OwnTone-Aussetzer.
     by = {o.get("name"): o for o in outs}
+    pn = pods_net() or {}
+    key = {"ShiPod BB": "bb", "ShiPod SB": "sb"}
     res = []
     for nm in ("ShiPod BB", "ShiPod SB"):
         o = by.get(nm)
-        res.append({"name": nm, "present": o is not None,
+        res.append({"name": nm, "present": (o is not None) or bool(pn.get(key[nm])),
                     "selected": bool(o and o.get("selected"))})
     return res
 
