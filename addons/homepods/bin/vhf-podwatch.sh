@@ -7,10 +7,18 @@
 O=http://localhost:3689
 NET=/run/vhf/pods-net
 mkdir -p /run/vhf
+# WLAN-Interface fuer IPv6-Link-Local-Zone (fe80::...%IFACE); auto, sonst wlan0.
+IFACE="${VHF_IFACE:-$(ip -o -4 route show to default 2>/dev/null | awk '{print $5; exit}')}"
+IFACE="${IFACE:-wlan0}"
 
-reachable(){ # mDNS-Resolve (faengt neue IPs ab) + AirPlay-Port 7000
-    local ip; ip=$(avahi-resolve -n "$1" 2>/dev/null | awk '{print $2}')
-    [ -n "$ip" ] && timeout 2 bash -c "echo >/dev/tcp/$ip/7000" 2>/dev/null
+reachable(){ # AirPlay-Port 7000 ueber IPv4 ODER IPv6 (HomePods sind oft nur v6 erreichbar!)
+    local h="$1" ip
+    ip=$(avahi-resolve -4 -n "$h" 2>/dev/null | awk '{print $2}')
+    [ -n "$ip" ] && timeout 2 bash -c "echo >/dev/tcp/$ip/7000" 2>/dev/null && return 0
+    ip=$(avahi-resolve -6 -n "$h" 2>/dev/null | awk '{print $2}')
+    [ -n "$ip" ] || return 1
+    case "$ip" in fe80:*) ip="$ip%$IFACE";; esac   # link-local braucht Zone
+    timeout 2 bash -c "echo >/dev/tcp/$ip/7000" 2>/dev/null
 }
 # WICHTIG: Timeout am curl! Ohne --max-time blockiert dieser Aufruf endlos, wenn
 # OwnTones API haengt (accepted, aber keine Antwort) -> die ganze Schleife friert ein

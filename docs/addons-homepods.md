@@ -33,6 +33,18 @@ sudo apt install owntone
 In `/etc/owntone.conf` configure at least one ALSA/pipe output, and **select** the
 AirPlay outputs once in the web interface (`http://<pi>:3689`).
 
+> **IPv6 einschalten — Pflicht für HomePods!** HomePods sind für AirPlay oft **nur
+> über IPv6** erreichbar (IPv4/ARP fällt weg, wenn sie schlafen); OwnTone hat IPv6
+> per Default **aus**. Ohne das verschwinden die HomePods sporadisch aus den
+> Ausgängen, obwohl AirPlay vom iPhone geht. In `/etc/owntone.conf`, Abschnitt
+> `general { … }`:
+> ```
+> ipv6 = yes
+> ```
+> danach `sudo systemctl restart owntone`. (Prüfen, welchen Weg die Pods nutzen:
+> `avahi-resolve -6 -n ShiPod-BB.local` → wenn eine `fe80:`/`fd..`-Adresse kommt und
+> `ping6` darauf antwortet, aber IPv4 tot ist, ist IPv6 zwingend.)
+
 ## Adjust device IDs (required!)
 
 The scripts contain **fixed OwnTone output IDs** of the HomePods in this setup:
