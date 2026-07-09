@@ -131,15 +131,22 @@ def owntone_outputs():
     except Exception:
         return []
 
-def get_hpvol(outs):
-    v = [o["volume"] for o in outs if o["name"].startswith("ShiPod")]
-    return int(sum(v) / len(v)) if v else 0
+HPVOL_FILE = "/var/lib/vhf/hpvol"
+
+def get_hpvol():
+    # Uebernahme-Lautstaerke aus der Datei (stabil, = was vhf-playout nutzt). NICHT die
+    # Live-OwnTone-Vol nehmen: die faellt auf 0, sobald die ShiPods (Schlaf/IPv6) kurz
+    # aus den Ausgaengen fallen -> Regler sprang deshalb auf 0.
+    try:
+        return max(0, min(100, int(open(HPVOL_FILE).read().strip())))
+    except Exception:
+        return 60
 
 def set_hpvol(v):
     v = int(max(0, min(100, float(v))))
     try:  # Uebernahme-Lautstaerke fuer vhf-playout.sh festhalten
         os.makedirs("/var/lib/vhf", exist_ok=True)
-        with open("/var/lib/vhf/hpvol", "w") as f:
+        with open(HPVOL_FILE, "w") as f:
             f.write(str(v))
     except Exception:
         pass
@@ -197,7 +204,7 @@ def heavy():
     if _cache["d"] is None or now - _cache["t"] > 1.2:
         outs = owntone_outputs()
         svc = svc_states()
-        _cache["d"] = {"outs": outs, "svc": svc, "hpvol": get_hpvol(outs),
+        _cache["d"] = {"outs": outs, "svc": svc, "hpvol": get_hpvol(),
                        "monvol": get_monvol(), "delay": read_delay()}
         _cache["t"] = now
     return _cache["d"]
