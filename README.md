@@ -2,7 +2,9 @@
 
 *🇩🇪 Deutsch · [🇬🇧 English](README.en.md)*
 
-<img width="984" height="1076" alt="Bildschirmfoto 2026-07-02 um 19 37 04" src="https://github.com/user-attachments/assets/1785da8d-0530-4b0f-8c07-640007a63ac4" />
+<img width="948" height="1330" alt="Bildschirmfoto 2026-07-02 um 19 36 48" src="https://github.com/user-attachments/assets/837f8130-7539-4d60-b95f-83fef8b14987" />
+
+<img width="984" height="1076" alt="Bildschirmfoto 2026-07-02 um 19 37 04" src="https://github.com/user-attachments/assets/21c31d67-c33a-494b-8db2-0374fd8659b3" />
 
 
 **Marine-VHF-Funk mitschneiden und sauber nachhören.** Ein Raspberry-Pi-System, das
