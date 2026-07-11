@@ -2,6 +2,9 @@
 
 *🇩🇪 Deutsch · [🇬🇧 English](README.en.md)*
 
+<img width="984" height="1076" alt="Bildschirmfoto 2026-07-02 um 19 37 04" src="https://github.com/user-attachments/assets/1785da8d-0530-4b0f-8c07-640007a63ac4" />
+
+
 **Marine-VHF-Funk mitschneiden und sauber nachhören.** Ein Raspberry-Pi-System, das
 den Ton aus einem VHF/UKW-Seefunkgerät über einen USB-Audio-Adapter abgreift, jeden
 Funkspruch als einzelne, entrauschte MP3 aufzeichnet und im Browser zum Nachhören,
