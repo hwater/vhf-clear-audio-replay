@@ -20,18 +20,29 @@ addons/homepods/
     └── vhf-podwatch.service
 ```
 
-## Prerequisite: OwnTone
+## Prerequisite: pyatv (not OwnTone!)
 
-Output goes through **[OwnTone](https://owntone.github.io/owntone-server/)** (a fork of
-forked-daapd) as an AirPlay-2 sender.
+Playout streams to the HomePods **directly via [pyatv](https://pyatv.dev)** (RAOP/AirPlay).
+**Deliberately not OwnTone:** OwnTone (v29.x) reliably crashes/hangs when streaming AirPlay
+to these particular HomePods (known upstream bugs; a HomeKit stereo pair that was dissolved
+is treated as individual AirPlay-1 devices). pyatv streams reliably, without OwnTone.
 
 ```bash
-# Install OwnTone from the official APT repo (see OwnTone docs)
-sudo apt install owntone
+sudo python3 -m venv /opt/pyatv-venv
+sudo /opt/pyatv-venv/bin/pip install pyatv
 ```
 
-In `/etc/owntone.conf` configure at least one ALSA/pipe output, and **select** the
-AirPlay outputs once in the web interface (`http://<pi>:3689`).
+`vhf-playout.sh` plays **dual-mono** (both pods the same clip in parallel) — fine for radio
+voice. OwnTone may keep running (mess output / pod detection) but is **no longer used** for
+HomePod playout. Get the device identifiers with `/opt/pyatv-venv/bin/atvremote scan`
+(the MAC-like line under *Identifiers*); HomePods usually need no pairing for RAOP
+(`Pairing: NotNeeded`) if "Allow Speaker & TV Access" is set to "Anyone on the same network".
+
+> **The old OwnTone route (kept for reference).** If you ever go back to OwnTone: it needs
+> IPv6 enabled — HomePods are often reachable for AirPlay **only over IPv6** (IPv4/ARP drops
+> when they sleep), and OwnTone defaults IPv6 off. Set `ipv6 = yes` in the
+> `general { … }` block of `/etc/owntone.conf`, then `sudo systemctl restart owntone`. But
+> even with that, OwnTone crashes streaming to these pods — hence pyatv.
 
 > **IPv6 einschalten — Pflicht für HomePods!** HomePods sind für AirPlay oft **nur
 > über IPv6** erreichbar (IPv4/ARP fällt weg, wenn sie schlafen); OwnTone hat IPv6

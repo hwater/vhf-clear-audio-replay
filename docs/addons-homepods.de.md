@@ -20,37 +20,42 @@ addons/homepods/
     └── vhf-podwatch.service
 ```
 
-## Voraussetzung: OwnTone
+## Voraussetzung: pyatv (nicht OwnTone!)
 
-Die Ausgabe läuft über **[OwnTone](https://owntone.github.io/owntone-server/)** (Fork
-von forked-daapd) als AirPlay-2-Sender.
+Die Funk-Übernahme streamt über **[pyatv](https://pyatv.dev)** (RAOP/AirPlay) **direkt**
+auf die HomePods. **Bewusst nicht OwnTone:** OwnTone (v29.x) stürzt beim AirPlay-Streaming
+zu genau diesen HomePods reproduzierbar ab bzw. hängt (bekannte upstream-Bugs; ein in
+HomeKit aufgelöstes Stereopaar wird als Einzelgeräte mit AirPlay 1 behandelt). pyatv
+streamt stabil, ganz ohne OwnTone.
 
 ```bash
-# OwnTone aus dem offiziellen APT-Repo installieren (siehe OwnTone-Doku)
-sudo apt install owntone
+# pyatv in ein venv installieren
+sudo python3 -m venv /opt/pyatv-venv
+sudo /opt/pyatv-venv/bin/pip install pyatv
 ```
 
-In `/etc/owntone.conf` mindestens einen ALSA/Pipe-Betrieb konfigurieren und die
-AirPlay-Ausgänge im Webinterface (`http://<pi>:3689`) einmalig **auswählen**.
+`vhf-playout.sh` spielt **Dual-Mono** (beide Pods parallel denselben Clip) — für
+Funksprache völlig ausreichend. OwnTone darf weiterlaufen (Messe-Ausgang / Pod-Erkennung),
+wird aber für die HomePod-Wiedergabe **nicht** mehr gebraucht.
 
 ## Geräte-IDs anpassen (Pflicht!)
 
-Die Skripte enthalten **feste OwnTone-Ausgangs-IDs** der HomePods dieses Setups:
+`vhf-playout.sh` enthält feste **pyatv/AirPlay-Identifier** der HomePods:
 
 ```bash
-# vhf-playout.sh
-BB=279973827291484     # ShiPod BB
-SB=178870811768074     # ShiPod SB
+BB=FE:A2:7C:85:A9:5C     # ShiPod BB
+SB=A2:AE:9B:32:35:0A     # ShiPod SB
 ```
 
-Deine IDs findest du mit:
+Deine findest du mit:
 
 ```bash
-curl -s http://localhost:3689/api/outputs | python3 -m json.tool
+/opt/pyatv-venv/bin/atvremote scan
 ```
 
-`BB`/`SB` in `vhf-playout.sh` **und** die Listen in `vhf-shipods.sh` / `vhf-podwatch.sh`
-(`NAME`-Map, `ShiPod-*.local`-Hostnamen) auf deine Geräte umschreiben.
+→ pro Gerät die MAC-artige Zeile unter **„Identifiers"** nehmen. Die HomePods brauchen für
+RAOP i.d.R. **keine Kopplung** (`Pairing: NotNeeded`), sofern in der Home-App
+„Lautsprecher- & TV-Zugriff" auf „Jeder im selben Netzwerk" steht.
 
 ## Funktionsweise
 
