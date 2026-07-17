@@ -631,10 +631,11 @@ async function lvlPoll(){try{const r=await fetch('/api/level');const s=await r.j
 lvlPoll();setInterval(lvlPoll,120);
 
 // ---- Kompakte Liste (oben): tippen = auf die HomePods spielen, + gut/Stoerung ----
-let playing=false, activeName=null;
+let playing=false, activeName=null, pendingUntil=0;
 async function stopPlay(){try{await fetch('/api/stop',{method:'POST'});}catch(e){}}
 function updatePlay(p){
-  const was=playing; playing=!!p; const list=$('reclist'); if(!list)return;
+  const was=playing; playing=!!p; if(p)pendingUntil=0;   // Ton da -> Lade-Fenster beenden
+  const list=$('reclist'); if(!list)return;
   if(!p){ if(was){list.querySelectorAll('.vu').forEach(e=>{e.parentElement.classList.remove('vuon');e.remove();});activeName=null;recPoll();} return; }
   if(!activeName)return;
   const row=list.querySelector('.rec[data-name="'+activeName+'"]'); if(!row)return;
@@ -660,7 +661,7 @@ function agefmt(s){
   const d=Math.floor(h/24), rh=h%24;
   return 'vor '+d+' T '+rh+':'+p(rm)+' Std';
 }
-async function recPoll(){if(playing||!recOpen)return;   // zu / Wiedergabe -> nicht neu aufbauen
+async function recPoll(){if(playing||!recOpen||Date.now()<pendingUntil)return;   // zu / Wiedergabe / gerade gestartet -> nicht neu aufbauen
   try{const r=await fetch('/api/recs');const list=await r.json();
   const c=$('reclist');if(!c)return;
   if(!list.length){c.innerHTML='<div class=rec style="opacity:.5;border-left-color:#444">noch keine</div>';return;}
@@ -676,6 +677,11 @@ async function recPoll(){if(playing||!recOpen)return;   // zu / Wiedergabe -> ni
 recPoll();setInterval(recPoll,5000);
 async function replayFile(el,name){
   activeName=name;   // Anzeigeort fuers VU = diese Zeile
+  pendingUntil=Date.now()+9000;                 // sofortiges Feedback bis der Ton (VU) uebernimmt
+  var ov=el.querySelector('.vu');
+  if(!ov){ov=document.createElement('div');ov.className='vu';ov.title='Wiedergabe stoppen';
+    ov.onclick=e=>{e.stopPropagation();stopPlay();};el.classList.add('vuon');el.appendChild(ov);}
+  ov.innerHTML='<span class=spin></span><span style="flex:1;color:#9affc7;font-size:12px">startet &hellip;</span>';
   try{await fetch('/api/replay?file='+encodeURIComponent(name),{method:'POST'});}catch(e){}}
 async function classify(name,as){
   try{await fetch('/api/classify?file='+encodeURIComponent(name)+'&as='+as,{method:'POST'});}catch(e){}
