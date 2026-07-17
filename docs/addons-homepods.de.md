@@ -12,7 +12,8 @@ Dateien: [`addons/homepods/`](../addons/homepods/)
 ```
 addons/homepods/
 ├── bin/
-│   ├── vhf-playout.sh    echten Funk-Clip kurz auf die AirPlay-Ausgänge spielen
+│   ├── vhf-playd.py       residenter pyatv-Daemon (hält pyatv warm → schneller Ton)
+│   ├── vhf-playout.sh    schlanker Client → reicht den Clip an vhf-playd weiter
 │   ├── vhf-shipods.sh    Ausgänge ausgewählt halten + Zustand melden
 │   └── vhf-podwatch.sh   Netz-Erreichbarkeit überwachen, OwnTone selbstheilen
 └── systemd/
@@ -59,27 +60,29 @@ RAOP i.d.R. **keine Kopplung** (`Pairing: NotNeeded`), sofern in der Home-App
 
 ## Funktionsweise
 
-- **`vhf-playout.sh <mp3> [now]`** – wählt die AirPlay-Ausgänge, setzt die Lautstärke
-  (`/var/lib/vhf/hpvol`), spielt genau einen Clip über OwnTone und gibt die Ausgänge
-  danach wieder frei. Ohne `now`: wartet die Verzögerung aus `/var/lib/vhf/delay`
-  (Default 7 s) ab und respektiert das Mute-Flag `/run/vhf/mute`.
-- **`vhf-shipods.*`** – ein Timer hält die AirPlay-2-Ausgänge *ausgewählt* (AirPlay-2
-  verliert die Auswahl bei OwnTone-Neustart) und meldet den Zustand nach
-  `/run/vhf/shipods.state`.
-- **`vhf-podwatch.*`** – prüft die WLAN-Erreichbarkeit der Pods (mDNS + AirPlay-Port
-  7000) und startet OwnTone *einmalig* neu (Cooldown 5 min), wenn beide wieder im Netz
-  sind, OwnTone sie aber verloren hat.
+- **`vhf-playd`** (Dienst) – residenter Daemon, hält pyatv geladen und streamt Clips
+  per RAOP **direkt auf beide ShiPods** (Dual-Mono), Lautstärke aus `/var/lib/vhf/hpvol`.
+  Dadurch entfällt der ~2 s pyatv-Kaltstart pro Übernahme → Klick-bis-Ton ~2,5 s.
+- **`vhf-playout.sh <mp3> [now]`** – schlanker Client: schreibt den Request atomar nach
+  `/run/vhf/playreq`. Ohne `now`: der Daemon wartet die Verzögerung aus
+  `/var/lib/vhf/delay` (Default 7 s) ab und respektiert das Mute-Flag `/run/vhf/mute`;
+  er setzt `/run/vhf/playing` (fürs VU-Overlay). Stoppen: `stop` nach `/run/vhf/playreq`.
+- **`vhf-shipods.*` / `vhf-podwatch.*`** – Reste vom OwnTone-Weg; für pyatv nicht mehr
+  nötig (podwatch meldet weiter die Netz-Erreichbarkeit der Pods fürs Panel).
 
 ## Installation
 
 ```bash
-sudo install -m755 addons/homepods/bin/*.sh /usr/local/bin/
+# pyatv (siehe oben) + Daemon
+sudo python3 -m venv /opt/pyatv-venv && sudo /opt/pyatv-venv/bin/pip install pyatv
+sudo install -m755 addons/homepods/bin/vhf-playd.py addons/homepods/bin/*.sh /usr/local/bin/
 sudo install -m644 addons/homepods/systemd/* /etc/systemd/system/
 sudo mkdir -p /var/lib/vhf
 echo 7  | sudo tee /var/lib/vhf/delay     # Verzögerung Sekunden
 echo 60 | sudo tee /var/lib/vhf/hpvol     # HomePod-Lautstärke 0..100
 sudo systemctl daemon-reload
-sudo systemctl enable --now vhf-shipods.timer vhf-podwatch
+sudo systemctl enable --now vhf-playd     # der Playout-Daemon (Pflicht)
+sudo systemctl enable --now vhf-podwatch  # optional: Pod-Erreichbarkeit fürs Panel
 ```
 
 Sobald `vhf-playout.sh` als `/usr/local/bin/vhf-playout.sh` **ausführbar** vorhanden

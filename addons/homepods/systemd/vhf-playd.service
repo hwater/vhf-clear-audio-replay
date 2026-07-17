@@ -1,0 +1,13 @@
+[Unit]
+Description=VHF pyatv Playout-Daemon (HomePod-Uebernahme, haelt pyatv warm)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/opt/pyatv-venv/bin/python3 /usr/local/bin/vhf-playd.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

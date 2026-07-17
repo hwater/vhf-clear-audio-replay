@@ -258,7 +258,7 @@ def is_playing():   # laeuft gerade eine Uebernahme/Wiederholung? (Flag von vhf-
         return False
 
 _env_cache = {}          # basename -> {"dur","env"} | "pending"
-PLAY_BUFFER = 5.1        # pyatv-Vorlauf: Ton startet ~5.1s nach Uebernahme-Beginn (RAOP-Connect+HomePod-Puffer)
+PLAY_BUFFER = 2.5        # pyatv-Daemon-Vorlauf: Ton ~2.5s nach playing-Flag (Connect ~0.5s + HomePod-Puffer ~2s)
 
 def _compute_env(base, path):
     try:
@@ -356,24 +356,16 @@ def read_mute():
     except Exception:
         return False
 
-def stop_playout():   # laufende Uebernahme/Wiedergabe sofort beenden + HomePods freigeben
-    subprocess.run(["pkill", "-f", "vhf-playout.sh"], timeout=5)
-    subprocess.run(["pkill", "-f", "vhf-messe-play.sh"], timeout=5)     # Messe-Wiedergabe
-    subprocess.run(["pkill", "-f", "aplay -q -D vhfoutplug"], timeout=5)
-    try:
-        req = urllib.request.Request(OWNTONE + "/api/player/stop", method="PUT")
-        urllib.request.urlopen(req, timeout=4).read()
+def stop_playout():   # laufende Uebernahme/Wiedergabe sofort beenden
+    try:  # HomePod-Stream: "stop" an den pyatv-Daemon (vhf-playd)
+        os.makedirs("/run/vhf", exist_ok=True)
+        with open("/run/vhf/playreq.tmp", "w") as f:
+            f.write("stop\n")
+        os.replace("/run/vhf/playreq.tmp", "/run/vhf/playreq")
     except Exception:
         pass
-    for oid in ("279973827291484", "178870811768074"):
-        try:
-            req = urllib.request.Request(
-                OWNTONE + "/api/outputs/" + oid,
-                data=b'{"selected":false}', method="PUT",
-                headers={"Content-Type": "application/json"})
-            urllib.request.urlopen(req, timeout=4).read()
-        except Exception:
-            pass
+    subprocess.run(["pkill", "-f", "vhf-messe-play.sh"], timeout=5)     # Messe-Wiedergabe
+    subprocess.run(["pkill", "-f", "aplay -q -D vhfoutplug"], timeout=5)
 
 def set_mute(on):
     on = str(on) in ("1", "true", "True")
