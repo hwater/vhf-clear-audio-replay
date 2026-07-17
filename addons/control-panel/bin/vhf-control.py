@@ -259,6 +259,7 @@ def is_playing():   # laeuft gerade eine Uebernahme/Wiederholung? (Flag von vhf-
 
 _env_cache = {}          # basename -> {"dur","env"} | "pending"
 PLAY_BUFFER = 2.5        # pyatv-Daemon-Vorlauf: Ton ~2.5s nach playing-Flag (Connect ~0.5s + HomePod-Puffer ~2s)
+END_LEAD = 2.0           # VU-Overlay schon END_LEAD s vor dem berechneten Ende auf idle
 
 def _compute_env(base, path):
     try:
@@ -298,6 +299,8 @@ def play_info():         # laufende Wiedergabe fuers VU in der aktiven Zeile
         dur, env = ce["dur"], ce["env"]
         pos = max(0.0, (time.time() - started) - PLAY_BUFFER)
         if dur:
+            if dur > END_LEAD + 0.5 and pos >= dur - END_LEAD:
+                return None        # kurz vor Ende schon auf idle (VU-Overlay weg)
             pos = min(pos, dur)
     return {"pos": round(pos, 1), "dur": dur, "env": env}
 
