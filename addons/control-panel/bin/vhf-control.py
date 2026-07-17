@@ -258,7 +258,7 @@ def is_playing():   # laeuft gerade eine Uebernahme/Wiederholung? (Flag von vhf-
         return False
 
 _env_cache = {}          # basename -> {"dur","env"} | "pending"
-PLAY_BUFFER = 3.0        # AirPlay-Vorlauf: Ton startet ~3s nach Uebernahme-Beginn
+PLAY_BUFFER = 2.0        # pyatv-Vorlauf: Ton startet ~2s nach Uebernahme-Beginn (RAOP-Connect+Puffer)
 
 def _compute_env(base, path):
     try:
@@ -282,6 +282,8 @@ def play_info():         # laufende Wiedergabe fuers VU in der aktiven Zeile
     except Exception:
         return None
     if time.time() - started > 120:
+        return None
+    if time.time() - started < PLAY_BUFFER:   # Ton noch nicht da -> VU-Overlay erst mit dem Ton zeigen
         return None
     ce = _env_cache.get(base)
     if ce is None:
