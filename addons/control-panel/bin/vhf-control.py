@@ -258,7 +258,7 @@ def is_playing():   # laeuft gerade eine Uebernahme/Wiederholung? (Flag von vhf-
         return False
 
 _env_cache = {}          # basename -> {"dur","env"} | "pending"
-PLAY_BUFFER = 3.5        # pyatv-Vorlauf: Ton startet ~3.5s nach Uebernahme-Beginn (RAOP-Connect+Puffer)
+PLAY_BUFFER = 5.1        # pyatv-Vorlauf: Ton startet ~5.1s nach Uebernahme-Beginn (RAOP-Connect+HomePod-Puffer)
 
 def _compute_env(base, path):
     try:
